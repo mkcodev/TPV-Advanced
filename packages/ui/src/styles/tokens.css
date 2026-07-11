@@ -1,10 +1,15 @@
 /*
- * tokens.css — FUENTE DE VERDAD del design system (modo claro).
+ * tokens.css — FUENTE DE VERDAD del design system (modo claro por defecto).
  * Todo son variables CSS en formato HSL (convención shadcn). Se referencian
  * como hsl(var(--primary)). Al estar en variables, un cliente PREMIUM puede
  * sobreescribir su color de marca en runtime sin tocar componentes.
  *
  * REGLA: los componentes NUNCA usan colores fijos (#hex). Solo estos tokens.
+ *
+ * CONTRASTE: los valores de --primary y --success han sido oscurecidos
+ * respecto al diseño inicial para alcanzar ≥4.5:1 con texto blanco (#fff).
+ * Verificar con herramienta de contraste (axe DevTools, Polypane) al
+ * implementar, especialmente en el botón "Cobrar" (success, xl).
  */
 :root {
   /* Superficies y texto */
@@ -15,8 +20,8 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  /* Marca / acento (azul claro profesional — personalizable en premium) */
-  --primary: 211 90% 54%;
+  /* Marca / acento — oscurecido a 42% L para AA 4.5:1 con texto blanco */
+  --primary: 211 90% 42%;
   --primary-foreground: 0 0% 100%;
 
   /* Secundario y neutros */
@@ -30,17 +35,22 @@
   /* Semánticos */
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 45%;
+
+  /* success — oscurecido a 29% L para AA 4.5:1 con texto blanco.
+     Los tokens state-free/state-* son más claros y solo se usan como
+     relleno/borde (ratio 3:1); no poner texto blanco encima sin verificar AA. */
+  --success: 142 72% 29%;
   --success-foreground: 0 0% 100%;
   --warning: 38 92% 50%;
   --warning-foreground: 222 47% 11%;
 
-  /* Bordes, inputs y foco */
+  /* Bordes, inputs y foco — ring sincronizado con --primary */
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 211 90% 54%;
+  --ring: 211 90% 42%;
 
-  /* Estados de mesa (plano de sala) */
+  /* Estados de mesa (plano de sala) — uso como relleno/borde (3:1 suficiente).
+     No poner texto blanco encima sin verificar contraste con herramienta. */
   --state-free: 142 71% 45%;      /* verde: libre */
   --state-occupied: 211 90% 54%;  /* azul: ocupada */
   --state-billing: 38 92% 50%;    /* ámbar: por cobrar */
@@ -48,4 +58,25 @@
 
   /* Radio base (esquinas suaves) */
   --radius: 0.5rem; /* 8px */
+
+  /* ── Motion ──────────────────────────────────────────────────────────────
+   * Usar siempre estas variables para duraciones y easing.
+   * Solo animar transform / opacity (nunca width/height/margin/padding).
+   * prefers-reduced-motion desactiva animaciones decorativas pero NUNCA
+   * el feedback de pulsación (scale), que es funcional.
+   */
+  --duration-fast:   150ms;                    /* feedback táctil, pulsaciones */
+  --duration-base:   250ms;                    /* transiciones de UI estándar  */
+  --duration-slow:   400ms;                    /* overlays, modales, panels     */
+  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ── Tema oscuro (KDS) ───────────────────────────────────────────────────────
+ * Obligatorio para la pantalla KDS (cocina, poca luz).
+ * Opcional para el TPV en turno de noche.
+ * Los valores concretos se definen en Fase 2 al implementar el KDS.
+ * El hueco está reservado para que añadir el tema no requiera tocar componentes.
+ */
+[data-theme='dark'] {
+  /* TODO Fase 2: definir tokens dark para KDS */
 }
