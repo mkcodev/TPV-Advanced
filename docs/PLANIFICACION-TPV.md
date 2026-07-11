@@ -25,33 +25,55 @@ La razón por la que "los TPV son una mierda y caros" es que el mercado está ll
 
 Esto **no es opcional** y condiciona el diseño de todo el sistema. En España (excepto País Vasco, que usa TicketBAI, y Navarra, con su sistema foral) aplica **Veri*factu**, regulado por el **Real Decreto 1007/2023** dentro de la Ley Antifraude (Ley 11/2021).
 
-### Calendario de obligación (a fecha de 2026)
-- **1 enero 2026** — sociedades con facturación > 6 millones €.
-- **1 enero 2027** — resto de sociedades (S.L., S.A.).
-- **1 julio 2027** — autónomos y pequeños negocios que tributan por IRPF (probablemente el caso del bar de tu padre).
+### Calendario de obligación (a verificar con gestor/AEAT vigente antes de lanzar)
 
-> Los plazos se han retrasado varias veces; **verifica la fecha vigente en la AEAT antes de lanzar**. Aun así, diséñalo conforme desde el día 1: es más caro añadirlo después.
+> ⚠️ **Los plazos se han retrasado varias veces** (el RDL 15/2025 fue el último aplazamiento). Las fechas siguientes son las vigentes a julio 2026, pero debes verificarlas con tu gestor o en la sede electrónica de la AEAT antes de cualquier decisión operativa.
+
+- **1 enero 2027** — Sociedades sometidas al Impuesto sobre Sociedades (S.L., S.A., etc.).
+- **1 julio 2027** — Autónomos y resto de obligados tributarios (IRPF).
+- **Excluidos de Veri*factu:** Los contribuyentes ya obligados al **Suministro Inmediato de Información (SII)** (grandes empresas con facturación >6M€, grupos de IVA e inscritos en el REDEME) tienen un sistema propio y **no aplican Veri*factu**.
+
+#### Ventana de pruebas voluntaria 2026
+
+Durante 2026 el uso de Veri*factu es **opcional** pero existe un **entorno de pruebas de la AEAT** al que se pueden enviar registros reales. Es la ventana ideal para validar el módulo legal sin riesgo antes de la obligación. **Plan:** usar esta ventana en la Fase 2 para confirmar que la integración funciona correctamente. Verificar instrucciones del entorno de pruebas con la AEAT antes de comenzar.
+
+#### El RD 1619/2012 aplica HOY (aunque Veri*factu sea futuro)
+
+> ⚠️ Aunque la obligación de Veri*factu llegue en 2027, el **Reglamento de facturación (RD 1619/2012)** aplica ya hoy: la **Fase 1 con ventas reales** debe emitir tickets con numeración correlativa correcta, conservarlos y respetar los campos legales mínimos. Verificar los requisitos concretos con tu gestor antes de la primera venta real.
 
 ### Qué debe cumplir OBLIGATORIAMENTE tu software (SIF — Sistema Informático de Facturación)
+
 1. **Registro de facturación por cada ticket/factura** emitido, generado de forma automática e inmediata.
 2. **Encadenamiento por hash**: cada registro incluye un hash que lo enlaza con el anterior, de modo que no se pueda modificar ni borrar nada retroactivamente sin que se note. (Integridad + inalterabilidad + trazabilidad.)
 3. **Código QR** visible en cada ticket/factura simplificada, para que Hacienda (y el cliente) pueda verificar su autenticidad.
 4. La leyenda **"VERI*FACTU"** en el ticket cuando operes en modo de envío a la AEAT.
 5. **Conservación, accesibilidad y legibilidad** de todos los registros.
-6. **Declaración responsable del fabricante**: como desarrollador del software, TÚ declaras (bajo responsabilidad legal) que cumple el reglamento. No hay un "sello de Hacienda" que aprueba; es autodeclaración con responsabilidad. Esto es serio: si vendes software no conforme, la multa al fabricante llega hasta **150.000 €**; al hostelero que usa software no conforme, hasta **50.000 €**.
+6. **Declaración responsable del fabricante**: como desarrollador del software, TÚ declaras (bajo responsabilidad legal) que cumple el reglamento. No hay un "sello de Hacienda" que aprueba; es autodeclaración con responsabilidad. Esto es serio: si vendes software no conforme, la multa al fabricante llega hasta **150.000 €**; al hostelero que usa software no conforme, hasta **50.000 €**. **Consulta con asesoría jurídica especializada antes de vender a terceros.**
 7. **Registro de eventos** (log interno de acciones del sistema: inicios, anulaciones, etc.).
 8. **Prohibido el software de "doble uso"** (que permita ocultar ventas). Nada de borrar tickets sin dejar rastro.
 
 ### Dos modalidades — decide cuál soportas (idealmente ambas)
-- **Modo VERI*FACTU (recomendado):** cada registro se envía **en tiempo real a la AEAT**. Ventaja: no tienes que conservar copias adicionales, menos responsabilidad de custodia. Requiere conexión y consumir el servicio web de la Agencia Tributaria.
+
+- **Modo VERI*FACTU (recomendado):** cada registro se envía **en tiempo real a la AEAT**. Ventaja: no tienes que conservar copias adicionales, menos responsabilidad de custodia. Requiere conexión y consumir el servicio web de la Agencia Tributaria. **Prerrequisito:** certificado digital del obligado tributario (o apoderamiento ante la AEAT) — verificar el procedimiento con tu gestor antes de la Fase 2.
 - **Modo NO VERI*FACTU:** los registros se guardan localmente con hash encadenado **+ firma electrónica**, y se conservan disponibles para inspección. Más libertad operativa (no necesita estar online), pero más responsabilidad y requisitos técnicos (firma digital).
 
 ### Otras obligaciones legales que afectan al TPV
-- **IVA correcto por producto**: hostelería suele ser 10% (comida y bebida servida), pero hay casos al 21%. El sistema debe permitir asignar tipo de IVA por producto y desglosarlo.
+
+- **IVA correcto por producto**: hostelería suele ser 10% (comida y bebida servida), pero hay casos al 21%. El sistema debe permitir asignar tipo de IVA por producto y desglosarlo. **Los precios al público siempre se muestran con IVA incluido** (normativa de consumo); el desglose en el ticket es informativo. Verificar con gestor.
 - **Factura simplificada (ticket)** con los datos mínimos legales: NIF y datos del emisor, número correlativo, fecha, desglose de IVA, total.
-- **Factura completa a petición** del cliente (con sus datos fiscales) — el sistema debe poder emitirla.
-- **RGPD / LOPD**: si guardas datos de empleados (nombre, foto, ventas) y de clientes (facturas con NIF), necesitas cumplir protección de datos: consentimiento, seguridad, y para el SaaS un contrato de encargado de tratamiento con tus clientes.
-- **Copia de seguridad / conservación** de la información contable durante los años que exige Hacienda (4 años como norma general, conviene más).
+- **Factura completa a petición** del cliente (con sus datos fiscales) — el sistema debe poder emitirla y también las **facturas rectificativas** (tipos R1–R5 AEAT, verificar con gestor/AEAT vigente).
+- **Alérgenos:** el Reglamento UE 1169/2011 obliga a informar los 14 alérgenos en hostelería — ver sección de catálogo en DATABASE-SCHEMA.md.
+- **Registro de jornada:** el RD-ley 8/2019 obliga al registro horario de todos los empleados. El módulo de fichaje está planificado para la **Fase 3**; los requisitos exactos (inmutabilidad, conservación 4 años, accesibilidad a inspección) deben verificarse con el gestor antes de implementar.
+- **RGPD / LOPD**: ver subsección abajo.
+
+### RGPD operativo
+
+Si guardas datos de empleados (nombre, foto, horarios, ventas) y de clientes (facturas con NIF), el RGPD exige:
+
+- **Base legal** por tipo de dato: contrato laboral para empleados; obligación legal para facturas; consentimiento o interés legítimo para clientes de fidelización.
+- **Seguridad**: acceso limitado por rol; cifrado en tránsito y reposo; contraseñas/PINs nunca en claro.
+- **Retención**: facturas y registros contables mínimo 4 años (verificar con gestor); datos de empleados lo que marque el convenio.
+- **Para el SaaS**: antes de dar de alta a clientes empresariales, firmar un **contrato de encargado de tratamiento (DPA)**. Esto es un entregable obligatorio de la **Fase 3**. Consultar con asesoría jurídica especializada.
 
 > **Conclusión legal:** el módulo de facturación (hash + QR + envío AEAT + registro inalterable) es el **corazón regulatorio** del producto. Planifícalo con Opus como una pieza aislada y bien testeada. No lo trates como un "extra al final".
 
@@ -66,6 +88,7 @@ Esto es lo que necesitas para que tu padre pueda usarlo de verdad:
 - **Tocar producto → se añade a la comanda → total en vivo**. Cantidades, modificar, eliminar líneas.
 - Modificadores/notas por línea ("sin hielo", "poco hecho", "para llevar").
 - Diferentes **tipos de IVA** por producto.
+- **Alérgenos** por producto (obligatorio UE 1169/2011).
 
 **Mesas y salas**
 - **Aparcar comandas por mesa**: abrir mesa, ir añadiendo, dejarla abierta y volver.
@@ -74,22 +97,22 @@ Esto es lo que necesitas para que tu padre pueda usarlo de verdad:
 - Transferir una comanda de una mesa a otra.
 
 **Cobro**
-- Métodos de pago: efectivo, tarjeta, mixto. Cálculo de cambio.
+- Métodos de pago: efectivo, tarjeta, Bizum, mixto. Cálculo de cambio.
 - **Impresión de ticket** (factura simplificada con QR Veri*factu).
 - (Fase 2) Integración con datáfono/TPV bancario.
 
 **Usuarios**
-- **Login por establecimiento** y luego **código PIN por empleado**.
+- **Login por establecimiento** y luego **código PIN por empleado** (verificado en servidor).
 - Roles: **Admin** (dueño/encargado) y **Trabajador**.
 - Perfil de empleado con **nombre y foto**.
 - **Registro de ventas por empleado** (quién ha cobrado qué).
 
 **Impresión**
 - Ticket de cliente (con QR legal).
-- **Comanda a cocina/barra** (impresora de cocina o pantalla KDS) — que el camarero mande la comanda y salga en la barra/cocina.
+- **Comanda a cocina/barra** (impresora de cocina o pantalla KDS) — que el camarero mande la comanda y salga en la barra/cocina. Ver `docs/PRINTING.md`.
 
 **Datos / caja**
-- **Cierre de caja / arqueo diario** (Z): total del día, por método de pago, por empleado.
+- **Cierre de caja / arqueo diario** (Z): total del día, por método de pago, por empleado. Incluye movimientos manuales de caja (pay-in/pay-out).
 - Histórico de tickets.
 
 ---
@@ -107,8 +130,24 @@ Lo que separa un TPV casero de un producto que puedes vender:
 - **Panel de administración** (web): productos, precios, empleados, informes, todo editable sin tocar la caja.
 - **Informes y analítica**: ventas por hora/día/producto/empleado, productos más vendidos, ticket medio, comparativas. Detectar la hora punta, el producto estrella.
 - **Gestión de stock/inventario**: descuento automático de existencias, avisos de bajo stock, escandallos (coste por plato).
-- **Horarios / fichaje** de empleados (entrada/salida) y propinas.
+- **Registro de jornada / fichaje** de empleados (entrada/salida) — obligatorio (RD-ley 8/2019, verificar con gestor) — **Fase 3**.
+- **Propinas**: registro y reparto por empleado.
 - **Multi-local**: un mismo dueño con varios bares, informes agregados.
+
+**Backlog de alto valor detectado en revisión (ordenado por facilidad de implementación)**
+
+| Feature | Por qué diferencia | Fase orientativa |
+|---|---|---|
+| **Bizum** como método de pago | España-específico; los TPV grandes lo ignoran | 1 |
+| **Modo barra rápida** | Venta sin mesa (type `counter`); es el 60% de las operaciones de un bar | 1 |
+| **"Marchar" cursos a cocina** | `order_items.course` ya existe; falta la acción en TPV/KDS | 2 |
+| **Cierre ciego de caja** | El empleado cuenta sin ver el esperado → anti-fraude | 2 |
+| **Export mensual para gestoría** (CSV/Excel Z + facturas) | Todo bar envía papeles a su asesoría mensualmente; un botón vende el producto solo | 3 |
+| **Informe diario por email al dueño** | Resumen Z automático cada noche; retención del SaaS | 3 |
+| **Fiado / cuenta de habitual** | El "apúntamelo" del bar de barrio; ningún competidor moderno lo tiene digno | 3 |
+| **Reparto de propinas por empleado** | `tip_cents` ya existe; solo falta el informe | 3 |
+| **Datáfono integrado** (SumUp/Adyen/Redsys) | Elimina el error de teclear el importe dos veces | 3+ |
+| **Carta QR multi-idioma** | i18n ya planificado; turismo costera/ciudad | 4 |
 
 **Experiencia de cliente (diferenciadores de venta)**
 - **Carta digital con QR** para que el cliente vea la carta con fotos en su móvil.
@@ -129,44 +168,66 @@ Lo que separa un TPV casero de un producto que puedes vender:
 
 ## 4. 🛠️ Stack tecnológico recomendado
 
-Criterios que pediste: **gastar menos tokens** (código conciso, un solo lenguaje de arriba a abajo, framework popular que Claude domina), que **Claude lo maneje muy bien**, y **máxima velocidad/fluidez**. Estas tres cosas apuntan al mismo sitio.
+Criterios que pediste: **gastar menos tokens** (código conciso, un solo lenguaje de arriba a abajo, framework popular que Claude domina), que **Claude lo maneje muy bien**, y **máxima velocidad/fluidez**.
 
-### Recomendación principal: **TypeScript de punta a punta**
+### Reparto de UI entre plataformas
 
-Un solo lenguaje (TypeScript) para web, móvil y backend = menos contexto, menos tokens, menos errores de "cambio de idioma mental" tanto para ti como para el modelo. Es el ecosistema que Claude conoce mejor y con más ejemplos.
+> **Importante:** no todas las plataformas comparten lo mismo.
+
+| Plataforma | Qué comparte con la web |
+|---|---|
+| **apps/web** | Todo (TPV + admin + landing) |
+| **apps/desktop** (Electron) | **100% de la UI web** — Electron es solo una cáscara; no se reescribe nada |
+| **apps/mobile** (app camareros) | **Solo lógica**: `@tpv/core`, `@tpv/api`, `@tpv/validators`. La UI es React DOM y React Native no la puede usar directamente |
+
+#### Estrategia PWA-first para la app de camareros
+
+La app de camareros se implementa **primero como PWA** (una ruta `/waiter` dentro de `apps/web`, instalable en Android/iOS con `manifest.json`). Esto reutiliza el 100% de la UI web y el design system, sin fricción de tiendas de apps ni segunda base de código.
+
+**Expo (React Native)** queda diferido para la Fase 4, solo si surge una necesidad nativa real (impresión Bluetooth, NFC, hardware específico). Hasta entonces, la PWA cubre todos los casos de uso.
+
+### Recomendación principal: TypeScript de punta a punta
 
 | Capa | Tecnología | Por qué |
 |------|-----------|---------|
-| **Frontend TPV (la caja)** | **React** + **Vite** + **TypeScript** | Lo que Claude maneja mejor del mundo. Rapidísimo en desarrollo. La carpeta se llama `next-TPV`, así que también encaja **Next.js** si quieres web + panel juntos. |
-| **UI / estilos** | **Tailwind CSS** + shadcn/ui | Estándar, poquísimo código, Claude lo genera perfecto. Botones grandes tipo TPV fáciles. |
-| **App móvil camareros** | **React Native (Expo)** o **PWA** | Reutilizas React y TypeScript. Expo si quieres app nativa en Android/iOS; PWA si quieres empezar rápido sin tiendas de apps. |
-| **Backend / API** | **Node.js** con **tRPC** o **Next.js API routes** | Mismo lenguaje, tipado extremo a extremo. Menos código de "pegamento". |
-| **Base de datos** | **PostgreSQL** (vía **Supabase**) | Robusta, gratis para empezar, y Supabase te da **auth + tiempo real + storage de fotos** listos. |
-| **Tiempo real** | **Supabase Realtime** o **WebSockets** | Para la sincronización caja↔móvil↔cocina instantánea. |
-| **Offline** | Base de datos local (**SQLite / IndexedDB**) + sincronización | Para que no se caiga si falla el WiFi. Es la parte técnica más delicada. |
-| **ORM** | **Prisma** o **Drizzle** | Esquema de BD tipado, migraciones fáciles, Claude lo escribe muy bien. |
-| **Impresión** | **ESC/POS** (protocolo estándar de impresoras de tickets) vía librería Node | Compatible con casi todas las impresoras térmicas baratas. |
-
-### Por qué esta pila y no otras
-- **¿Por qué no un lenguaje "más rápido" (Go, Rust, C++)?** Para un TPV, el cuello de botella **no es la CPU del servidor**; es la red, la sincronización y la UI. TypeScript/React es más que suficientemente rápido y te ahorra muchísimos tokens y tiempo. La fluidez que nota el usuario depende del **frontend** (React optimizado, tiempo real, offline), no del lenguaje del backend.
-- **Supabase** te ahorra construir tú mismo autenticación, tiempo real, almacenamiento de fotos y base de datos — semanas de trabajo (y tokens) menos.
-- **Un solo lenguaje** = el contexto que le das a Claude es coherente, reutilizable y compacto → **menos tokens por tarea**.
-- Todo son tecnologías **enormemente populares** → Claude tiene el máximo de ejemplos y comete menos errores → menos idas y venidas → menos tokens.
-
-### Alternativa si priorizas máxima velocidad de UI nativa
-**Flutter (Dart)**: una sola base de código para Android, iOS y escritorio, rendimiento nativo excelente y muy fluido para pantallas táctiles. **Contra:** Claude lo maneja bien pero tiene menos ejemplos que React → algo más de tokens y correcciones. Solo lo elegiría si la fluidez táctil nativa fuese la prioridad absoluta sobre todo lo demás.
-
-> **Decisión sugerida:** React + TypeScript + Supabase + Tailwind. Es el punto óptimo entre "Claude lo borda", "pocos tokens" y "suficientemente rápido y fluido".
+| **Frontend TPV + admin** | **Next.js** (App Router) + **React** | Claude lo domina; App Router, SSR, excelente para la web |
+| **UI / estilos** | **Tailwind CSS** + **shadcn/ui** | Estándar, poquísimo código, Claude lo genera perfecto |
+| **App móvil camareros** | **PWA** (ruta `/waiter` en apps/web) primero; Expo diferido | Reutiliza toda la UI web; Expo solo si hay necesidad nativa |
+| **App escritorio (la caja)** | **Electron** (cáscara sobre la UI web) | Sin reescribir la interfaz |
+| **Backend / API** | **Next.js API routes** + **tRPC** | Mismo lenguaje, tipado extremo a extremo |
+| **Base de datos** | **PostgreSQL** vía **Supabase** | Robusta, auth + tiempo real + storage listos |
+| **Tiempo real** | **Supabase Realtime** | Para la sincronización caja↔camareros↔cocina |
+| **Offline** | **SQLite** local en Electron + capa de sincronización | Para que no se caiga si falla el WiFi |
+| **Estado TPV (cliente)** | **Zustand** (comanda activa, cola offline) | Global, ligero, fácil de testear |
+| **i18n** | **next-intl** | App Router-nativo; mensajes compartibles entre paquetes |
+| **ORM** | **Drizzle ORM** | Tipado, migraciones fáciles, Claude lo escribe bien |
+| **Impresión** | **ESC/POS** desde Electron | Compatible con impresoras térmicas baratas |
+| **Observabilidad** | **Sentry** (al desplegar en real) | Soporte sin telemetría de errores = ciego |
 
 ---
 
-## 5. 🏗️ Arquitectura (decisiones a tomar antes de programar)
+## 5. 🏗️ Arquitectura (decisiones tomadas)
 
-- **Multi-tenant desde el diseño**: cada registro de la BD lleva un `business_id`. Aunque solo esté el bar de tu padre, esto permite vender a otros sin reescribir. Aislar datos por negocio (Row Level Security de Supabase).
-- **Local-first / offline-first**: la caja guarda datos en local y sincroniza. No debe depender de que internet vaya bien. Esta decisión hay que tomarla al principio porque condiciona toda la estructura de datos.
-- **Módulo de facturación aislado**: el hash encadenado + QR + envío AEAT como una pieza separada, testeada a fondo y con sus propios registros. Es la parte con implicaciones legales; debe ser la mejor testeada del proyecto.
-- **Tiempo real**: canal por mesa/negocio para que todos los dispositivos vean lo mismo al instante.
-- **Roles y permisos**: definir desde el principio qué puede hacer Admin vs Trabajador.
+- **Multi-tenant desde el diseño**: cada registro de la BD lleva un `business_id`. Aunque solo esté el bar de tu padre, esto permite vender a otros sin reescribir. Aislar datos por negocio con Row Level Security de Supabase.
+- **Doble defensa multi-tenant**: (1) middleware tRPC `businessProcedure` que inyecta `business_id` desde la sesión (el `business_id` nunca se acepta como parámetro de entrada de un endpoint); (2) RLS con `auth.jwt()` para superficies con acceso directo a Supabase (Realtime, carta pública, PWA). Ver detalles en `docs/DATABASE-SCHEMA.md` "Notas de implementación".
+- **Autenticación de dispositivos y empleados**: ver `docs/AUTH-DEVICES.md`. Resumen: dispositivo se empareja desde el admin → token persistente; empleado = PIN verificado en servidor, nunca en cliente.
+- **Servidor autoritativo de totales**: el cliente calcula totales para la UI optimista (feedback instantáneo), pero el servidor **siempre recalcula** con `@tpv/core` antes de persistir, cobrar o facturar.
+- **Emisor legal único por negocio**: solo el nodo emisor designado del negocio (la caja Electron si existe; el backend cloud si no) escribe en `billing_records`. El resto de dispositivos solicita la emisión. Esto evita el fork de la cadena de hash encadenada. Ver `docs/DATABASE-SCHEMA.md` módulo 6.
+- **Offline-first (solo caja/escritorio)**: la caja sigue funcionando sin internet; las operaciones se encolan y se sincronizan al volver la conexión. Ver la estrategia de sync en `docs/DATABASE-SCHEMA.md`. Las tablets/PWA de camareros funcionan en modo degradado (solo lectura) si se pierde la conexión.
+
+### Matriz de fallos de red (lo que se garantiza por Fase)
+
+| Escenario | Fase 1 | Fase 2 (objetivo) |
+|---|---|---|
+| Internet caído, LAN viva | Sin garantía | Caja autónoma total (vende, imprime, encola) |
+| WiFi local caído | Sin garantía | Caja autónoma; tablets en modo degradado |
+| Solo la caja funciona | Sin garantía | Caja sigue; sincronizan al reconectar |
+
+> No prometer más de lo que se construirá. La autonomía offline es solo de la caja en Fase 2; la autonomía de tablets es un objetivo posterior si lo demanda un cliente.
+
+- **Módulo de facturación aislado**: el hash encadenado + QR + envío AEAT como una pieza separada, testeada a fondo. Funciones puras en `packages/core/billing`; IO (BD, AEAT, red) en `packages/api`/`db`.
+- **Tiempo real**: canal por `business_id` (privado, autorizado) para que todos los dispositivos vean lo mismo al instante. Payloads mínimos (ids + versión); el cliente refetchea.
+- **Roles y permisos**: definir desde el principio qué puede hacer Admin/Manager vs Worker. Ver `docs/AUTH-DEVICES.md`.
 
 ---
 
@@ -176,16 +237,18 @@ Un solo lenguaje (TypeScript) para web, móvil y backend = menos contexto, menos
 Esquema de base de datos, roles, arquitectura multi-tenant y offline, y el diseño del módulo de facturación legal. **Todo esto se DECIDE antes de programar.**
 
 **Fase 1 — MVP usable en el bar**
-Catálogo con fotos, comanda táctil, mesas/zonas, cobro, ticket impreso, login por PIN, cierre de caja. → **Ponerlo en el bar de tu padre y usarlo de verdad.**
+Catálogo con fotos + alérgenos, comanda táctil, mesas/zonas, cobro (efectivo/tarjeta/Bizum/mixto), ticket impreso, login por PIN, cierre de caja, modo barra rápida.
+→ **Ponerlo en el bar de tu padre y usarlo de verdad.**
+> ⚠️ Con ventas reales aplica ya el RD 1619/2012 — tickets correlativos y conservación. Verificar con gestor antes de la primera venta.
 
 **Fase 2 — Legal + móvil**
-Veri*factu completo (hash, QR, envío AEAT), comanda desde móvil en tiempo real, impresora de cocina, offline robusto.
+Veri*factu completo (hash, QR, envío AEAT — **usar la ventana de pruebas AEAT 2026**), comanda desde PWA de camareros en tiempo real, impresora de cocina / KDS, "marchar" cursos, offline robusto en la caja, cierre ciego de caja.
 
 **Fase 3 — Producto vendible**
-Panel de admin, informes/analítica, inventario, multi-local, suscripciones, onboarding.
+Panel de admin, informes/analítica, inventario, registro de jornada (RD-ley 8/2019 — verificar con gestor), export para gestoría, suscripciones, onboarding, multi-local, DPA para clientes SaaS.
 
 **Fase 4 — Diferenciadores**
-Carta QR, pago desde mesa por el cliente, fidelización, reservas, delivery.
+Carta QR, pago desde mesa por el cliente, fidelización/fiado, reservas, delivery, datáfono integrado, Expo nativa (si hay necesidad probada).
 
 > No intentes hacer todo a la vez. Cada fase que funciona en el bar real es una validación que vale oro.
 
@@ -193,26 +256,15 @@ Carta QR, pago desde mesa por el cliente, fidelización, reservas, delivery.
 
 ## 7. 🤖 Cómo planificar con Opus y ejecutar con Sonnet (flujo y "indicaciones previas")
 
-Esto es lo que pediste: cómo prepararlo para que **todo funcione de la mejor manera** gastando pocos tokens. La idea de "planificar con Opus, ejecutar con Sonnet" es correcta y así se hace bien:
-
 ### El principio: separar PENSAR de TECLEAR
 - **Opus** (caro, más listo): decisiones de arquitectura, esquema de base de datos, el módulo legal, y **escribir un plan detallado** y documentos de especificación. Úsalo poco pero para lo importante.
 - **Sonnet** (barato, rápido): ejecutar ese plan, escribir el código rutinario, componentes de UI, tests. Aquí gastas la mayoría del trabajo pero a menor coste.
 
-### Antes de crear el proyecto, deja escrito (esto ahorra MUCHOS tokens luego):
-1. **Este documento** (visión, funcionalidades, legal, stack) — ya lo tienes.
-2. Un archivo **`CLAUDE.md`** en la raíz del proyecto con: el stack elegido, convenciones de código, estructura de carpetas, y "reglas" (ej. "usa TypeScript estricto", "componentes en /src/components", "nada de librerías nuevas sin justificar"). Claude lo lee automáticamente en cada sesión → no tienes que repetir el contexto → menos tokens.
-3. Un **esquema de base de datos** aprobado (tablas: negocios, usuarios, productos, categorías, mesas, comandas, líneas de comanda, tickets, registros de facturación...).
-4. Un **plan por fases con tareas concretas** (como el roadmap de arriba, pero desglosado en tareas pequeñas).
-
 ### Reglas para gastar menos tokens
-- **Trabaja por tareas pequeñas y cerradas**, no "hazme el TPV entero". Cada tarea = un archivo o una función concreta.
-- **Un plan aprobado antes de picar código**: Opus planifica, tú revisas, Sonnet ejecuta. Rehacer código es lo que más tokens quema.
+- **Trabaja por tareas pequeñas y cerradas**, no "hazme el TPV entero".
+- **Un plan aprobado antes de picar código**: Opus planifica, tú revisas, Sonnet ejecuta.
 - **Reutiliza el `CLAUDE.md`** para no re-explicar el contexto cada vez.
-- **Un solo lenguaje (TypeScript)** en todo el stack → contexto coherente y reutilizable.
-- **Tecnologías populares** (React, Postgres) → menos correcciones.
 - **Tests para el módulo legal**: que un fallo se detecte solo, sin rondas de depuración manual.
-- Pide a Claude que **modifique archivos existentes** en vez de reescribirlos enteros cuando el cambio es pequeño.
 
 ### Flujo de trabajo recomendado
 1. Sesión con **Opus en modo plan**: "diseña el esquema de BD y la arquitectura para X" → revisas y apruebas.
@@ -225,7 +277,7 @@ Esto es lo que pediste: cómo prepararlo para que **todo funcione de la mejor ma
 ## 8. 💰 Negocio y hardware (para venderlo)
 
 - **Hardware barato**: apunta a que funcione en **tablets Android normales** + impresora térmica ESC/POS + cajón portamonedas estándar. No ates a los clientes a hardware propietario caro — ese es justo el dolor del mercado que puedes atacar.
-- **Modelo de precio**: cuota mensual por local (SaaS), sin permanencias abusivas. Los competidores caros y con contratos largos son tu oportunidad.
+- **Modelo de precio**: cuota mensual por local (SaaS), sin permanencias abusivas.
 - **Responsabilidad legal del fabricante**: al vender, tú eres el "fabricante del SIF" y firmas la declaración responsable. Antes de vender a terceros, conviene **asesoría fiscal/legal** para cubrir esto bien (y para los contratos RGPD con los clientes).
 - **Empieza con tu padre** como cliente cero y caso de éxito. Un bar real usándolo a diario es tu mejor argumento de venta y tu mejor banco de pruebas.
 
@@ -235,13 +287,14 @@ Esto es lo que pediste: cómo prepararlo para que **todo funcione de la mejor ma
 
 - [ ] Confirmar región y normativa (España común → **Veri*factu**). ✔ decidido.
 - [ ] Confirmar objetivo (bar + SaaS). ✔ decidido.
-- [ ] Aprobar el **stack** (React + TS + Supabase + Tailwind).
+- [ ] Aprobar el **stack** (React + TS + Supabase + Tailwind). ✔ decidido.
 - [ ] Aprobar el **esquema de base de datos** (con Opus).
 - [ ] Definir el **diseño del módulo de facturación legal** (hash + QR + AEAT).
-- [ ] Crear el **`CLAUDE.md`** con convenciones y estructura.
+- [ ] Crear el **`CLAUDE.md`** con convenciones y estructura. ✔ existe.
 - [ ] Desglosar la **Fase 1 (MVP)** en tareas concretas.
 - [ ] (Recomendado) Consulta con **asesor fiscal** sobre Veri*factu y la declaración responsable.
+- [ ] (Prerrequisito Fase 2) **Certificado digital del obligado** (o apoderamiento ante la AEAT) para el envío de registros Veri*factu — verificar el procedimiento con gestor.
 
 ---
 
-*Siguiente paso sugerido: cuando quieras, hacemos con Opus el esquema de base de datos y el `CLAUDE.md`, y montamos el esqueleto del proyecto en esta carpeta.*
+*Siguiente paso sugerido: Fase 0 — materializar el esquema en Drizzle, configurar Supabase y arrancar la app web.*
