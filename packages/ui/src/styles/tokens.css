@@ -51,10 +51,10 @@
 
   /* Estados de mesa (plano de sala) — uso como relleno/borde (3:1 suficiente).
      No poner texto blanco encima sin verificar contraste con herramienta. */
-  --state-free: 142 71% 45%;      /* verde: libre */
-  --state-occupied: 211 90% 54%;  /* azul: ocupada */
-  --state-billing: 38 92% 50%;    /* ámbar: por cobrar */
-  --state-reserved: 262 83% 58%;  /* violeta: reservada */
+  --state-free: 142 71% 45%; /* verde: libre */
+  --state-occupied: 211 90% 54%; /* azul: ocupada */
+  --state-billing: 38 92% 50%; /* ámbar: por cobrar */
+  --state-reserved: 262 83% 58%; /* violeta: reservada */
 
   /* Radio base (esquinas suaves) */
   --radius: 0.5rem; /* 8px */
@@ -65,10 +65,10 @@
    * prefers-reduced-motion desactiva animaciones decorativas pero NUNCA
    * el feedback de pulsación (scale), que es funcional.
    */
-  --duration-fast:   150ms;                    /* feedback táctil, pulsaciones */
-  --duration-base:   250ms;                    /* transiciones de UI estándar  */
-  --duration-slow:   400ms;                    /* overlays, modales, panels     */
-  --ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms; /* feedback táctil, pulsaciones */
+  --duration-base: 250ms; /* transiciones de UI estándar  */
+  --duration-slow: 400ms; /* overlays, modales, panels     */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* ── Tema oscuro (KDS) ───────────────────────────────────────────────────────
@@ -77,6 +77,6 @@
  * Los valores concretos se definen en Fase 2 al implementar el KDS.
  * El hueco está reservado para que añadir el tema no requiera tocar componentes.
  */
-[data-theme='dark'] {
+[data-theme="dark"] {
   /* TODO Fase 2: definir tokens dark para KDS */
 }

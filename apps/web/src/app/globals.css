@@ -1,0 +1,13 @@
+@import "tailwindcss";
+/* Design system tokens — fuente de verdad en packages/ui */
+@import "@tpv/ui/styles/tokens.css";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
