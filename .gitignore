@@ -1,0 +1,18 @@
+# deps
+node_modules
+.pnpm-store
+# builds
+dist
+build
+out
+.next
+.expo
+.turbo
+# env & secrets
+.env
+.env.*
+!.env.example
+# misc
+coverage
+*.log
+.DS_Store

@@ -1,0 +1,51 @@
+/*
+ * tokens.css — FUENTE DE VERDAD del design system (modo claro).
+ * Todo son variables CSS en formato HSL (convención shadcn). Se referencian
+ * como hsl(var(--primary)). Al estar en variables, un cliente PREMIUM puede
+ * sobreescribir su color de marca en runtime sin tocar componentes.
+ *
+ * REGLA: los componentes NUNCA usan colores fijos (#hex). Solo estos tokens.
+ */
+:root {
+  /* Superficies y texto */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Marca / acento (azul claro profesional — personalizable en premium) */
+  --primary: 211 90% 54%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Secundario y neutros */
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  /* Semánticos */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 222 47% 11%;
+
+  /* Bordes, inputs y foco */
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 211 90% 54%;
+
+  /* Estados de mesa (plano de sala) */
+  --state-free: 142 71% 45%;      /* verde: libre */
+  --state-occupied: 211 90% 54%;  /* azul: ocupada */
+  --state-billing: 38 92% 50%;    /* ámbar: por cobrar */
+  --state-reserved: 262 83% 58%;  /* violeta: reservada */
+
+  /* Radio base (esquinas suaves) */
+  --radius: 0.5rem; /* 8px */
+}
