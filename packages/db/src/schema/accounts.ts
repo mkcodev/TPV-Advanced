@@ -3,7 +3,7 @@
 // Nota: las relations inversas hacia módulos posteriores (businesses→orders, etc.)
 // se omiten a propósito para evitar ciclos de import; consulta desde el lado del FK.
 
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
   check,
@@ -15,7 +15,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { createdAt, id, inEnum, timestamps } from './helpers';
+import { createdAt, id, inEnum, selectPolicy, tenantSelectPolicy, timestamps } from './helpers';
 
 export const SUBSCRIPTION_PLANS = ['free', 'basic', 'pro'] as const;
 export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
@@ -41,13 +41,18 @@ export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
 // Perfil público de quien entra al panel admin.
 // id = auth.users.id de Supabase Auth (por eso NO lleva defaultRandom):
 // la fila se crea a partir del usuario que ya existe en auth.
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey(),
-  fullName: text('full_name'),
-  email: text('email').notNull(),
-  avatarUrl: text('avatar_url'),
-  ...timestamps,
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey(),
+    fullName: text('full_name'),
+    email: text('email').notNull(),
+    avatarUrl: text('avatar_url'),
+    ...timestamps,
+  },
+  // Cada usuario solo ve su propio perfil.
+  () => [selectPolicy('users', sql`id = (select auth.uid())`)],
+);
 
 export const organizations = pgTable(
   'organizations',
@@ -71,6 +76,7 @@ export const organizations = pgTable(
       'organizations_subscription_status_check',
       inEnum(t.subscriptionStatus, SUBSCRIPTION_STATUSES),
     ),
+    selectPolicy('organizations', sql`id in (select public.user_organization_ids())`),
   ],
 );
 
@@ -101,7 +107,11 @@ export const businesses = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [check('businesses_verifactu_mode_check', inEnum(t.verifactuMode, VERIFACTU_MODES))],
+  (t) => [
+    check('businesses_verifactu_mode_check', inEnum(t.verifactuMode, VERIFACTU_MODES)),
+    // El id de businesses ES el business_id del predicado.
+    selectPolicy('businesses', sql`public.has_business_access(id)`),
+  ],
 );
 
 export const memberships = pgTable(
@@ -120,6 +130,11 @@ export const memberships = pgTable(
   (t) => [
     unique('memberships_user_organization_unique').on(t.userId, t.organizationId),
     check('memberships_role_check', inEnum(t.role, MEMBERSHIP_ROLES)),
+    // Las propias + las de compañeros de organización (para listar el equipo).
+    selectPolicy(
+      'memberships',
+      sql`user_id = (select auth.uid()) or organization_id in (select public.user_organization_ids())`,
+    ),
   ],
 );
 
@@ -144,6 +159,9 @@ export const employees = pgTable(
   (t) => [
     index('employees_business_id_idx').on(t.businessId),
     check('employees_role_check', inEnum(t.role, EMPLOYEE_ROLES)),
+    // Además de la política, 0001 restringe por GRANT las columnas visibles
+    // (pin_hash y datos laborales nunca llegan a un cliente supabase-js).
+    tenantSelectPolicy('employees'),
   ],
 );
 
@@ -164,6 +182,7 @@ export const devices = pgTable(
   (t) => [
     index('devices_business_id_idx').on(t.businessId),
     check('devices_type_check', inEnum(t.type, DEVICE_TYPES)),
+    tenantSelectPolicy('devices'),
   ],
 );
 
@@ -183,7 +202,7 @@ export const customers = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [index('customers_business_id_idx').on(t.businessId)],
+  (t) => [index('customers_business_id_idx').on(t.businessId), tenantSelectPolicy('customers')],
 );
 
 // Registro de jornada (RD-ley 8/2019) — append-only: nunca UPDATE/DELETE.
@@ -209,6 +228,7 @@ export const timeEntries = pgTable(
     index('time_entries_business_id_idx').on(t.businessId),
     index('time_entries_employee_id_idx').on(t.employeeId),
     check('time_entries_source_check', inEnum(t.source, TIME_ENTRY_SOURCES)),
+    tenantSelectPolicy('time_entries'),
   ],
 );
 

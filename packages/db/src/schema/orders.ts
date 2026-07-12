@@ -21,7 +21,7 @@ import {
 import { businesses, devices, employees } from './accounts';
 import { modifiers, productVariants, products } from './catalog';
 import { tables, zones } from './floor';
-import { createdAt, id, inEnum, timestamps } from './helpers';
+import { createdAt, id, inEnum, selectPolicy, tenantSelectPolicy, timestamps } from './helpers';
 
 export const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery', 'counter'] as const;
 export type OrderType = (typeof ORDER_TYPES)[number];
@@ -81,6 +81,7 @@ export const cashSessions = pgTable(
   (t) => [
     index('cash_sessions_business_id_idx').on(t.businessId),
     check('cash_sessions_status_check', inEnum(t.status, CASH_SESSION_STATUSES)),
+    tenantSelectPolicy('cash_sessions'),
   ],
 );
 
@@ -129,6 +130,7 @@ export const orders = pgTable(
     index('orders_business_created_at_idx').on(t.businessId, t.createdAt),
     check('orders_type_check', inEnum(t.type, ORDER_TYPES)),
     check('orders_status_check', inEnum(t.status, ORDER_STATUSES)),
+    tenantSelectPolicy('orders'),
   ],
 );
 
@@ -164,6 +166,11 @@ export const orderItems = pgTable(
     index('order_items_order_status_idx').on(t.orderId, t.status), // KDS
     check('order_items_status_check', inEnum(t.status, ORDER_ITEM_STATUSES)),
     check('order_items_quantity_check', sql`${t.quantity} > 0`),
+    // Hija sin business_id: hereda el acceso de la comanda padre.
+    selectPolicy(
+      'order_items',
+      sql`exists (select 1 from public.orders o where o.id = order_id and public.has_business_access(o.business_id))`,
+    ),
   ],
 );
 
@@ -179,7 +186,14 @@ export const orderItemModifiers = pgTable(
     priceDeltaCents: integer('price_delta_cents').notNull(),
     ...createdAt,
   },
-  (t) => [index('order_item_modifiers_order_item_id_idx').on(t.orderItemId)],
+  (t) => [
+    index('order_item_modifiers_order_item_id_idx').on(t.orderItemId),
+    // Nieta: dos saltos hasta el business_id (order_items → orders).
+    selectPolicy(
+      'order_item_modifiers',
+      sql`exists (select 1 from public.order_items oi join public.orders o on o.id = oi.order_id where oi.id = order_item_id and public.has_business_access(o.business_id))`,
+    ),
+  ],
 );
 
 // Varios pagos por comanda = pago mixto o cuenta dividida.
@@ -212,6 +226,7 @@ export const payments = pgTable(
     index('payments_business_cash_session_idx').on(t.businessId, t.cashSessionId),
     check('payments_method_check', inEnum(t.method, PAYMENT_METHODS)),
     check('payments_status_check', inEnum(t.status, PAYMENT_STATUSES)),
+    tenantSelectPolicy('payments'),
   ],
 );
 
@@ -239,6 +254,7 @@ export const cashMovements = pgTable(
     index('cash_movements_business_id_idx').on(t.businessId),
     check('cash_movements_type_check', inEnum(t.type, CASH_MOVEMENT_TYPES)),
     check('cash_movements_amount_check', sql`${t.amountCents} > 0`),
+    tenantSelectPolicy('cash_movements'),
   ],
 );
 
@@ -264,6 +280,7 @@ export const orderEvents = pgTable(
   (t) => [
     index('order_events_order_id_idx').on(t.orderId),
     index('order_events_business_id_idx').on(t.businessId),
+    tenantSelectPolicy('order_events'),
   ],
 );
 

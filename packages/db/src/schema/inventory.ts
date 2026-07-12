@@ -1,11 +1,11 @@
 // Módulo 3 — Inventario (se activa en Fase 3; el esquema queda listo ya).
 // Fuente de verdad: docs/DATABASE-SCHEMA.md (módulo 3).
 
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { boolean, check, index, integer, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { businesses, employees } from './accounts';
 import { products } from './catalog';
-import { createdAt, id, inEnum, timestamps } from './helpers';
+import { createdAt, id, inEnum, selectPolicy, tenantSelectPolicy, timestamps } from './helpers';
 import { orders } from './orders';
 
 export const INVENTORY_UNITS = ['unit', 'kg', 'l'] as const;
@@ -33,6 +33,7 @@ export const inventoryItems = pgTable(
   (t) => [
     index('inventory_items_business_id_idx').on(t.businessId),
     check('inventory_items_unit_check', inEnum(t.unit, INVENTORY_UNITS)),
+    tenantSelectPolicy('inventory_items'),
   ],
 );
 
@@ -50,7 +51,14 @@ export const productRecipes = pgTable(
     quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
     ...timestamps,
   },
-  (t) => [index('product_recipes_product_id_idx').on(t.productId)],
+  (t) => [
+    index('product_recipes_product_id_idx').on(t.productId),
+    // Hija sin business_id: hereda el acceso del producto padre.
+    selectPolicy(
+      'product_recipes',
+      sql`exists (select 1 from public.products p where p.id = product_id and public.has_business_access(p.business_id))`,
+    ),
+  ],
 );
 
 // Historial de stock — append-only: correcciones = movimiento nuevo 'adjustment'.
@@ -75,6 +83,7 @@ export const stockMovements = pgTable(
     index('stock_movements_business_id_idx').on(t.businessId),
     index('stock_movements_inventory_item_id_idx').on(t.inventoryItemId),
     check('stock_movements_type_check', inEnum(t.type, STOCK_MOVEMENT_TYPES)),
+    tenantSelectPolicy('stock_movements'),
   ],
 );
 

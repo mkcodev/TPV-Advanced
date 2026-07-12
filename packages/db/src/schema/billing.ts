@@ -4,7 +4,7 @@
 // nunca UPDATE/DELETE. La inmutabilidad se refuerza en app/RLS/triggers en
 // fases posteriores. Formatos de hash/QR: SOLO según la spec oficial AEAT.
 
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   bigint,
@@ -20,7 +20,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { businesses, customers, devices, employees } from './accounts';
-import { createdAt, id, inEnum } from './helpers';
+import { createdAt, id, inEnum, selectPolicy, tenantSelectPolicy } from './helpers';
 import { orders } from './orders';
 
 export const INVOICE_TYPES = ['simplified', 'complete', 'rectificative'] as const;
@@ -69,6 +69,7 @@ export const invoices = pgTable(
     unique('invoices_business_series_number_unique').on(t.businessId, t.series, t.number),
     index('invoices_business_issue_date_idx').on(t.businessId, t.issueDate),
     check('invoices_invoice_type_check', inEnum(t.invoiceType, INVOICE_TYPES)),
+    tenantSelectPolicy('invoices'),
   ],
 );
 
@@ -85,7 +86,14 @@ export const invoiceTaxLines = pgTable(
     taxCents: integer('tax_cents').notNull(),
     ...createdAt,
   },
-  (t) => [index('invoice_tax_lines_invoice_id_idx').on(t.invoiceId)],
+  (t) => [
+    index('invoice_tax_lines_invoice_id_idx').on(t.invoiceId),
+    // Hija sin business_id: hereda el acceso de la factura padre.
+    selectPolicy(
+      'invoice_tax_lines',
+      sql`exists (select 1 from public.invoices i where i.id = invoice_id and public.has_business_access(i.business_id))`,
+    ),
+  ],
 );
 
 // EL CORAZÓN LEGAL: un registro por factura, encadenado por hash con el anterior.
@@ -125,6 +133,8 @@ export const billingRecords = pgTable(
     index('billing_records_invoice_id_idx').on(t.invoiceId),
     check('billing_records_record_type_check', inEnum(t.recordType, BILLING_RECORD_TYPES)),
     check('billing_records_aeat_status_check', inEnum(t.aeatStatus, AEAT_STATUSES)),
+    // Solo-lectura vía RLS = ningún cliente puede forjar registros legales.
+    tenantSelectPolicy('billing_records'),
   ],
 );
 
@@ -147,7 +157,10 @@ export const systemEvents = pgTable(
     previousHash: text('previous_hash'),
     ...createdAt,
   },
-  (t) => [index('system_events_business_id_idx').on(t.businessId)],
+  (t) => [
+    index('system_events_business_id_idx').on(t.businessId),
+    tenantSelectPolicy('system_events'),
+  ],
 );
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({

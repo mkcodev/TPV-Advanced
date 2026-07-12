@@ -17,7 +17,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { businesses } from './accounts';
-import { createdAt, id, inEnum, timestamps } from './helpers';
+import { createdAt, id, inEnum, selectPolicy, tenantSelectPolicy, timestamps } from './helpers';
 
 export const PRINT_DESTINATIONS = ['kitchen', 'bar', 'none'] as const;
 export type PrintDestination = (typeof PRINT_DESTINATIONS)[number];
@@ -63,6 +63,7 @@ export const productCategories = pgTable(
       'product_categories_print_destination_check',
       inEnum(t.printDestination, PRINT_DESTINATIONS),
     ),
+    tenantSelectPolicy('product_categories'),
   ],
 );
 
@@ -89,7 +90,7 @@ export const products = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [index('products_business_id_idx').on(t.businessId)],
+  (t) => [index('products_business_id_idx').on(t.businessId), tenantSelectPolicy('products')],
 );
 
 export const productVariants = pgTable(
@@ -107,7 +108,14 @@ export const productVariants = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [index('product_variants_product_id_idx').on(t.productId)],
+  (t) => [
+    index('product_variants_product_id_idx').on(t.productId),
+    // Hija sin business_id: hereda el acceso del producto padre.
+    selectPolicy(
+      'product_variants',
+      sql`exists (select 1 from public.products p where p.id = product_id and public.has_business_access(p.business_id))`,
+    ),
+  ],
 );
 
 export const modifierGroups = pgTable(
@@ -123,7 +131,10 @@ export const modifierGroups = pgTable(
     isRequired: boolean('is_required').default(false).notNull(),
     ...timestamps,
   },
-  (t) => [index('modifier_groups_business_id_idx').on(t.businessId)],
+  (t) => [
+    index('modifier_groups_business_id_idx').on(t.businessId),
+    tenantSelectPolicy('modifier_groups'),
+  ],
 );
 
 export const modifiers = pgTable(
@@ -139,7 +150,13 @@ export const modifiers = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [index('modifiers_modifier_group_id_idx').on(t.modifierGroupId)],
+  (t) => [
+    index('modifiers_modifier_group_id_idx').on(t.modifierGroupId),
+    selectPolicy(
+      'modifiers',
+      sql`exists (select 1 from public.modifier_groups g where g.id = modifier_group_id and public.has_business_access(g.business_id))`,
+    ),
+  ],
 );
 
 // Junction: qué grupos de modificadores aplican a qué producto.
@@ -155,7 +172,13 @@ export const productModifierGroups = pgTable(
     displayOrder: integer('display_order').default(0).notNull(),
     ...createdAt,
   },
-  (t) => [primaryKey({ columns: [t.productId, t.modifierGroupId] })],
+  (t) => [
+    primaryKey({ columns: [t.productId, t.modifierGroupId] }),
+    selectPolicy(
+      'product_modifier_groups',
+      sql`exists (select 1 from public.products p where p.id = product_id and public.has_business_access(p.business_id))`,
+    ),
+  ],
 );
 
 export const comboSections = pgTable(
@@ -171,7 +194,13 @@ export const comboSections = pgTable(
     displayOrder: integer('display_order').default(0).notNull(),
     ...timestamps,
   },
-  (t) => [index('combo_sections_combo_product_id_idx').on(t.comboProductId)],
+  (t) => [
+    index('combo_sections_combo_product_id_idx').on(t.comboProductId),
+    selectPolicy(
+      'combo_sections',
+      sql`exists (select 1 from public.products p where p.id = combo_product_id and public.has_business_access(p.business_id))`,
+    ),
+  ],
 );
 
 export const comboSectionItems = pgTable(
@@ -187,7 +216,14 @@ export const comboSectionItems = pgTable(
     priceDeltaCents: integer('price_delta_cents').default(0).notNull(), // suplemento (ej. "+3 €")
     ...timestamps,
   },
-  (t) => [index('combo_section_items_combo_section_id_idx').on(t.comboSectionId)],
+  (t) => [
+    index('combo_section_items_combo_section_id_idx').on(t.comboSectionId),
+    // Nieta: dos saltos hasta el business_id (combo_sections → products).
+    selectPolicy(
+      'combo_section_items',
+      sql`exists (select 1 from public.combo_sections cs join public.products p on p.id = cs.combo_product_id where cs.id = combo_section_id and public.has_business_access(p.business_id))`,
+    ),
+  ],
 );
 
 export const productCategoriesRelations = relations(productCategories, ({ one, many }) => ({

@@ -4,7 +4,7 @@
 import { relations } from 'drizzle-orm';
 import { boolean, check, index, integer, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { businesses } from './accounts';
-import { id, inEnum, timestamps } from './helpers';
+import { id, inEnum, tenantSelectPolicy, timestamps } from './helpers';
 
 export const TABLE_SHAPES = ['square', 'round'] as const;
 export type TableShape = (typeof TABLE_SHAPES)[number];
@@ -25,7 +25,7 @@ export const zones = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },
-  (t) => [index('zones_business_id_idx').on(t.businessId)],
+  (t) => [index('zones_business_id_idx').on(t.businessId), tenantSelectPolicy('zones')],
 );
 
 // tables.status es una CACHÉ visual del plano. La fuente de verdad es la
@@ -56,6 +56,7 @@ export const tables = pgTable(
     index('tables_business_id_idx').on(t.businessId),
     check('tables_shape_check', inEnum(t.shape, TABLE_SHAPES)),
     check('tables_status_check', inEnum(t.status, TABLE_STATUSES)),
+    tenantSelectPolicy('tables'),
   ],
 );
 
