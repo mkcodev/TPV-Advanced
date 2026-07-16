@@ -1,0 +1,54 @@
+{
+  "app": {
+    "title": "TPV Advanced",
+    "description": "Sistema de punto de venta para hostelería"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "close": "Cerrar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "add": "Añadir",
+    "remove": "Quitar",
+    "search": "Buscar"
+  },
+  "tpv": {
+    "header": {
+      "businessName": "Mi Negocio",
+      "openMenu": "Abrir menú"
+    },
+    "sync": {
+      "online": "En línea",
+      "offline": "Sin conexión",
+      "syncing": "Sincronizando"
+    },
+    "employee": {
+      "label": "Empleado",
+      "noEmployee": "Sin empleado"
+    },
+    "nav": {
+      "drinks": "Bebidas",
+      "kitchen": "Cocina",
+      "desserts": "Postres",
+      "others": "Otros"
+    },
+    "content": {
+      "selectCategory": "Selecciona una categoría",
+      "noProducts": "No hay productos en esta categoría"
+    },
+    "order": {
+      "title": "Comanda",
+      "empty": "Sin artículos",
+      "emptyHint": "Toca un producto para añadirlo",
+      "clear": "Limpiar",
+      "subtotal": "Subtotal",
+      "tax": "IVA",
+      "total": "Total",
+      "charge": "Cobrar"
+    }
+  }
+}
