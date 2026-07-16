@@ -167,7 +167,15 @@ describe.skipIf(!url)('RLS isolation (integration)', () => {
         tx.execute(
           sql`insert into public.zones (business_id, name) values (${seeded.bizA}, 'Forged')`,
         ),
-      ).rejects.toThrow(/row-level security/);
+        // Postura solo-lectura: no hay GRANT INSERT ⇒ denegado por privilegios
+        // antes de que RLS lo evalúe. Cualquier denegación (permission denied o
+        // row-level security) confirma la invariante "cliente no puede escribir".
+        // Drizzle envuelve el PostgresError en cause; comprobamos ambos niveles.
+      ).rejects.toMatchObject({
+        cause: expect.objectContaining({
+          message: expect.stringMatching(/permission denied|row-level security/),
+        }),
+      });
     });
   });
 
