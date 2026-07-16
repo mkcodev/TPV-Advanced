@@ -175,6 +175,9 @@ export const devices = pgTable(
       .notNull(),
     name: text('name').notNull(),
     type: text('type').$type<DeviceType>().notNull(),
+    // SHA-256 base64url of the opaque device token. Null = revoked.
+    // The cleartext token is returned only once at pairing time.
+    deviceTokenHash: text('device_token_hash').unique(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,

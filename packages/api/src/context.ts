@@ -1,6 +1,4 @@
-// Contexto de autenticación de la API — el CONTRATO de la doble defensa.
-// La resolución real (verificar JWT de Supabase / token de dispositivo) llega
-// en la tarea 0.4; aquí solo se fija la forma que el resto del código consume.
+import type { Database } from '@tpv/db';
 
 // Unión discriminada: TypeScript obliga a tratar cada camino por separado.
 export type AuthContext =
@@ -9,22 +7,31 @@ export type AuthContext =
   // Panel admin (Supabase Auth). businessId = negocio activo elegido,
   // ya validado contra memberships; null = aún no ha elegido negocio.
   | { kind: 'admin'; userId: string; businessId: string | null }
-  // TPV / tablet de camarero (token de dispositivo + PIN). El businessId sale
-  // de la fila devices — NUNCA del cliente. employeeId = quién fichó con PIN.
+  // TPV / tablet de camarero (token de dispositivo + sesión PIN). El businessId
+  // sale de la fila devices — NUNCA del cliente. employeeId = quién fichó con PIN.
   | { kind: 'device'; deviceId: string; businessId: string; employeeId: string | null };
 
 export interface Context {
   auth: AuthContext;
+  db: Database;
+  // Client IP for rate limiting. In production depends on the reverse proxy
+  // forwarding x-forwarded-for; 'unknown' is used as a safe fallback.
+  ip: string;
 }
 
-// Adaptador que la 0.4 implementará: de las cabeceras HTTP al AuthContext.
+// Adaptador de cabeceras HTTP → AuthContext.
 export interface AuthResolver {
   resolveAuth(opts: { headers: Headers }): Promise<AuthContext>;
 }
 
 // Fabrica el createContext que consume el adapter HTTP de tRPC.
-export function createContextFactory(resolver: AuthResolver) {
-  return async function createContext(opts: { headers: Headers }): Promise<Context> {
-    return { auth: await resolver.resolveAuth(opts) };
+export function createContextFactory(resolver: AuthResolver, db: Database) {
+  return async function createContext(opts: { req: Request }): Promise<Context> {
+    const ip = opts.req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    return {
+      auth: await resolver.resolveAuth({ headers: opts.req.headers }),
+      db,
+      ip,
+    };
   };
 }

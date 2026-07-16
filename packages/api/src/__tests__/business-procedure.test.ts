@@ -1,3 +1,4 @@
+import type { Database } from '@tpv/db';
 import { describe, expect, it } from 'vitest';
 import type { Context } from '../context';
 import { businessProcedure, createCallerFactory, router } from '../trpc';
@@ -13,7 +14,10 @@ const testRouter = router({
 });
 
 const createCaller = createCallerFactory(testRouter);
-const callerWith = (auth: Context['auth']) => createCaller({ auth });
+
+// db e ip no son usados por businessProcedure, los falseamos para el test.
+const MOCK_DB = {} as unknown as Database;
+const callerWith = (auth: Context['auth']) => createCaller({ auth, db: MOCK_DB, ip: '127.0.0.1' });
 
 describe('businessProcedure', () => {
   it('derives businessId from a device context', async () => {

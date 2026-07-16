@@ -179,5 +179,143 @@ describe.skipIf(!url)('RLS isolation (integration)', () => {
     });
   });
 
-  it.todo('E2E via supabase-js with real login on both paths (after task 0.4)');
+  // E2E con login real vía supabase-js — implementado en 0.4.
+  // Requiere NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
+  it('E2E via supabase-js with real login on both paths', async (ctx) => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !anonKey || !serviceKey || !url) {
+      return ctx.skip();
+    }
+
+    const { createClient } = await import('@supabase/supabase-js');
+
+    // Admin client to create and clean up test users.
+    const adminClient = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Unique email suffix prevents collisions between parallel runs.
+    const suffix = crypto.randomUUID();
+    const emailA = `tpv-e2e+a-${suffix}@test.local`;
+    const emailB = `tpv-e2e+b-${suffix}@test.local`;
+    const password = `TPV-e2e-${suffix.slice(0, 8)}!`;
+
+    // Pre-clean any orphaned users from previous runs (best-effort).
+    const { data: orphans } = await adminClient.auth.admin.listUsers();
+    await Promise.all(
+      (orphans?.users ?? [])
+        .filter((u) => u.email?.startsWith('tpv-e2e+'))
+        .map((u) => adminClient.auth.admin.deleteUser(u.id)),
+    );
+
+    // Create two independent users in Supabase Auth.
+    const { data: authA, error: errA } = await adminClient.auth.admin.createUser({
+      email: emailA,
+      password,
+      email_confirm: true,
+    });
+    const { data: authB, error: errB } = await adminClient.auth.admin.createUser({
+      email: emailB,
+      password,
+      email_confirm: true,
+    });
+
+    if (errA || errB || !authA.user || !authB.user) {
+      ctx.skip();
+      return;
+    }
+
+    const userAId = authA.user.id;
+    const userBId = authB.user.id;
+
+    try {
+      // Seed orgs + memberships + businesses using the owner connection.
+      const ownerDb = createDb(url);
+      let bizAId: string;
+      let bizBId: string;
+
+      try {
+        // Insert profile rows (users table mirrors auth.users).
+        await ownerDb.insert(users).values([
+          { id: userAId, email: emailA },
+          { id: userBId, email: emailB },
+        ]);
+
+        const orgARow = first(
+          await ownerDb
+            .insert(organizations)
+            .values({ name: 'E2E Org A', ownerUserId: userAId })
+            .returning({ id: organizations.id }),
+        );
+        const orgBRow = first(
+          await ownerDb
+            .insert(organizations)
+            .values({ name: 'E2E Org B', ownerUserId: userBId })
+            .returning({ id: organizations.id }),
+        );
+
+        await ownerDb.insert(memberships).values([
+          { userId: userAId, organizationId: orgARow.id, role: 'owner' },
+          { userId: userBId, organizationId: orgBRow.id, role: 'owner' },
+        ]);
+
+        const bizARow = first(
+          await ownerDb
+            .insert(businesses)
+            .values({ organizationId: orgARow.id, name: 'E2E Bar A' })
+            .returning({ id: businesses.id }),
+        );
+        const bizBRow = first(
+          await ownerDb
+            .insert(businesses)
+            .values({ organizationId: orgBRow.id, name: 'E2E Bar B' })
+            .returning({ id: businesses.id }),
+        );
+
+        bizAId = bizARow.id;
+        bizBId = bizBRow.id;
+
+        // Path 1 — real Supabase JWT: user A logs in, should only see Biz A.
+        const clientA = createClient(supabaseUrl, anonKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { error: loginErr } = await clientA.auth.signInWithPassword({
+          email: emailA,
+          password,
+        });
+        expect(loginErr).toBeNull();
+
+        const { data: bizList, error: bizErr } = await clientA
+          .from('businesses')
+          .select('id')
+          .in('id', [bizAId, bizBId]);
+        expect(bizErr).toBeNull();
+        expect(bizList).toHaveLength(1);
+        expect(bizList?.[0]?.id).toBe(bizAId);
+
+        // Path 2 — user B sees only Biz B.
+        const clientB = createClient(supabaseUrl, anonKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await clientB.auth.signInWithPassword({ email: emailB, password });
+
+        const { data: bizListB } = await clientB
+          .from('businesses')
+          .select('id')
+          .in('id', [bizAId, bizBId]);
+        expect(bizListB).toHaveLength(1);
+        expect(bizListB?.[0]?.id).toBe(bizBId);
+      } finally {
+        await ownerDb.$client.end();
+      }
+    } finally {
+      // Clean up: remove seeded data and auth users.
+      await Promise.all([
+        adminClient.auth.admin.deleteUser(userAId),
+        adminClient.auth.admin.deleteUser(userBId),
+      ]);
+    }
+  });
 });
