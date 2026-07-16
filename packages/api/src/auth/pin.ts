@@ -1,7 +1,7 @@
-import { Algorithm, hash, verify } from '@node-rs/argon2';
+import { hash, verify } from '@node-rs/argon2';
 
 const ARGON2_OPTIONS = {
-  algorithm: Algorithm.Argon2id,
+  // @node-rs/argon2 usa Argon2id por defecto
   memoryCost: 65536,
   timeCost: 3,
   outputLen: 32,
