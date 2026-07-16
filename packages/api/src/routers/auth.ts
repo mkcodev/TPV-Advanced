@@ -40,12 +40,21 @@ export const authRouter = router({
       const code = generatePairingCode(secureRandomInt);
       const expiresAt = pairingCodeExpiresAt(new Date());
 
+      // Only Supabase admin users can create pairing codes — employees.id is not a
+      // valid FK to users.id and the device path has no stable users.id at all.
+      if (ctx.auth.kind !== 'admin') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'device terminals cannot create pairing codes',
+        });
+      }
+
       await ctx.db.insert(pairingCodes).values({
         businessId: ctx.businessId,
         code,
         deviceName: input.name,
         deviceType: input.type,
-        createdBy: ctx.auth.kind === 'admin' ? ctx.auth.userId : (ctx.employeeId ?? ''),
+        createdBy: ctx.auth.userId,
         expiresAt,
       });
 
