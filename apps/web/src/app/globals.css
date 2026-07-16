@@ -2,9 +2,55 @@
 /* Design system tokens — fuente de verdad en packages/ui */
 @import "@tpv/ui/styles/tokens.css";
 
+/* Escaneamos los componentes del paquete ui para que Tailwind no purgue
+   sus clases (bg-primary, text-foreground, etc.) en el build de web.
+   Path relativo a este archivo: 4 niveles arriba llega al root del monorepo. */
+@source "../../../../packages/ui/src";
+
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* ── Fuente ────────────────────────────────────────────────────────── */
+  --font-sans: var(--font-inter);
+
+  /* ── Colores — mapeo tokens.css → utilidades Tailwind ──────────────
+     Tailwind v4 genera bg-{name}, text-{name}, border-{name}, etc.
+     a partir de --color-{name}. Los valores hsl(var(--x)) conectan
+     con las variables CSS definidas en tokens.css sin duplicar valores. */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Estados de mesa (plano de sala) */
+  --color-state-free: hsl(var(--state-free));
+  --color-state-occupied: hsl(var(--state-occupied));
+  --color-state-billing: hsl(var(--state-billing));
+  --color-state-reserved: hsl(var(--state-reserved));
+
+  /* ── Radios — sobreescribe defaults de Tailwind con nuestra escala ──
+     Base: --radius = 0.5rem (8px) definido en tokens.css. */
+  --radius-sm: calc(var(--radius) - 4px); /* 4px  */
+  --radius-md: calc(var(--radius) - 2px); /* 6px  */
+  --radius-lg: var(--radius); /* 8px  */
+  --radius-xl: calc(var(--radius) + 4px); /* 12px */
 }
 
 body {
