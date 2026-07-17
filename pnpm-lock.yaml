@@ -180,6 +180,9 @@ importers:
         specifier: ^2.5.4
         version: 2.6.1
     devDependencies:
+      '@storybook/addon-a11y':
+        specifier: ^10.5.0
+        version: 10.5.2(storybook@10.5.2(@types/react@19.2.17)(react@19.2.4))
       '@storybook/react':
         specifier: ^10.5.0
         version: 10.5.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(storybook@10.5.2(@types/react@19.2.17)(react@19.2.4))(typescript@5.9.3)
@@ -2106,6 +2109,11 @@ packages:
   '@schummar/icu-type-parser@1.21.5':
     resolution: {integrity: sha512-bXHSaW5jRTmke9Vd0h5P7BtWZG9Znqb8gSDxZnxaGSJnGwPLDPfS+3g0BKzeWqzgZPsIVZkM7m2tbo18cm5HBw==}
 
+  '@storybook/addon-a11y@10.5.2':
+    resolution: {integrity: sha512-BMze+oj1Jz3QcGl0E6mjuVA32zPD/cTu3Ev4O4qNbKbqLXO4wA1G6aEd8+CGcQtTGEyMCsr0BH6I/WnXcwA1bQ==}
+    peerDependencies:
+      storybook: ^10.5.2
+
   '@storybook/builder-vite@10.5.2':
     resolution: {integrity: sha512-XxY/zpMrEOXqdJaEw8s7fJefDCjO1eRkjvZvb50ojiqDJpTdfguhBrwqlHilpWWt5a12VjbbMrUHza4YPs/bBg==}
     peerDependencies:
@@ -2650,6 +2658,10 @@ packages:
 
   ast-types@0.16.1:
     resolution: {integrity: sha512-6t10qk83GOG8p0vKmaCr8eiilZwO171AvbROMtvvNiwrTly62t+7XkA8RdIIVbpMhCASAsxgAzdRSwh6nw/5Dg==}
+    engines: {node: '>=4'}
+
+  axe-core@4.12.1:
+    resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
     engines: {node: '>=4'}
 
   balanced-match@4.0.4:
@@ -4996,6 +5008,12 @@ snapshots:
 
   '@schummar/icu-type-parser@1.21.5': {}
 
+  '@storybook/addon-a11y@10.5.2(storybook@10.5.2(@types/react@19.2.17)(react@19.2.4))':
+    dependencies:
+      '@storybook/global': 5.0.0
+      axe-core: 4.12.1
+      storybook: 10.5.2(@types/react@19.2.17)(react@19.2.4)
+
   '@storybook/builder-vite@10.5.2(esbuild@0.28.1)(rollup@4.62.2)(storybook@10.5.2(@types/react@19.2.17)(react@19.2.4))(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.0))':
     dependencies:
       '@storybook/csf-plugin': 10.5.2(esbuild@0.28.1)(rollup@4.62.2)(storybook@10.5.2(@types/react@19.2.17)(react@19.2.4))(vite@6.4.3(@types/node@20.19.43)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.0))
@@ -5501,6 +5519,8 @@ snapshots:
   ast-types@0.16.1:
     dependencies:
       tslib: 2.8.1
+
+  axe-core@4.12.1: {}
 
   balanced-match@4.0.4: {}
 
