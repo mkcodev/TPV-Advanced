@@ -351,6 +351,48 @@ describe('catalog.products.update', () => {
     const patch = (setCall?.args[0] ?? {}) as Record<string, unknown>;
     expect(patch).not.toHaveProperty('basePriceCents');
   });
+
+  it('applies every updateProductSchema field to the SET patch', async () => {
+    // Regression guard: if a field is added to updateProductSchema but forgotten in the
+    // explicit SET construction, this test catches it. Add any new optional field here.
+    const CAT_ID = '00000000-0000-0000-0000-000000000010';
+    const { db, calls } = queuedDb([
+      OWNER_ROLE, // getMembershipRole
+      [{ id: CAT_ID }], // assertCategoryOwnership (triggered by categoryId)
+      [PROD], // update.returning()
+    ]);
+    const caller = createCaller({ ...adminCtx('biz-1'), db });
+    await caller.catalog.products.update({
+      id: PROD.id,
+      name: 'Caña actualizada',
+      description: 'Descripción nueva',
+      imageUrl: 'https://example.com/img.jpg',
+      allergens: ['gluten', 'milk'],
+      sku: 'SKU-001',
+      isCombo: true,
+      trackStock: true,
+      displayOrder: 5,
+      basePriceCents: 350,
+      categoryId: CAT_ID,
+      taxRate: 21,
+    });
+
+    const setCall = calls.find((c) => c.method === 'set');
+    const patch = (setCall?.args[0] ?? {}) as Record<string, unknown>;
+    expect(patch.name).toBe('Caña actualizada');
+    expect(patch.description).toBe('Descripción nueva');
+    expect(patch.imageUrl).toBe('https://example.com/img.jpg');
+    expect(patch.allergens).toEqual(['gluten', 'milk']);
+    expect(patch.sku).toBe('SKU-001');
+    expect(patch.isCombo).toBe(true);
+    expect(patch.trackStock).toBe(true);
+    expect(patch.displayOrder).toBe(5);
+    expect(patch.basePriceCents).toBe(350);
+    expect(patch.categoryId).toBe(CAT_ID);
+    // taxRate is serialised to string before going to the DB
+    expect(typeof patch.taxRate).toBe('string');
+    expect(patch.taxRate).toBe('21');
+  });
 });
 
 // ── variants.update — aislamiento via subquery ───────────────────────────

@@ -130,6 +130,7 @@ pnpm db:migrate        # aplicar migraciones (entorno del DATABASE_URL en .env)
 - **Funciones pequeñas y puras** en `packages/core` (fáciles de testear, sin efectos secundarios).
 - **Sin secretos en el código.** Usa variables de entorno. Nunca commitees `.env`.
 - **Comentarios:** explica el *porqué*, no el *qué*. Notas cortas bienvenidas para el mantenedor principiante.
+- **Patches explícitos campo a campo:** cuando un router tRPC construye el objeto `set` de un `update` listando cada campo de forma condicional (`...(x !== undefined && { campo: x })`), **debe existir un test por cada campo del schema Zod de update** que verifique que ese campo llega al SET de la BD. Sin el test, un campo nuevo en el schema Zod se puede olvidar en el patch y perderse en silencio (bug `basePriceCents`, tarea 1.2b).
 
 ---
 

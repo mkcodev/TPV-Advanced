@@ -58,7 +58,7 @@ async function main() {
       end if;
     end $$;
     `,
-    // Escritura restringida al prefijo del negocio del usuario autenticado
+    // INSERT restringido al prefijo del negocio del usuario autenticado
     `
     do $$ begin
       if not exists (
@@ -69,6 +69,47 @@ async function main() {
         create policy "product_images_write_own_business"
           on storage.objects for insert
           with check (
+            bucket_id = 'product-images'
+            and auth.role() = 'authenticated'
+            and public.has_business_access((storage.foldername(name))[1]::uuid)
+          );
+      end if;
+    end $$;
+    `,
+    // UPDATE: reemplazar imagen existente (mismo prefijo de negocio)
+    `
+    do $$ begin
+      if not exists (
+        select 1 from pg_policies
+        where schemaname='storage' and tablename='objects'
+        and policyname='product_images_update_own_business'
+      ) then
+        create policy "product_images_update_own_business"
+          on storage.objects for update
+          using (
+            bucket_id = 'product-images'
+            and auth.role() = 'authenticated'
+            and public.has_business_access((storage.foldername(name))[1]::uuid)
+          )
+          with check (
+            bucket_id = 'product-images'
+            and auth.role() = 'authenticated'
+            and public.has_business_access((storage.foldername(name))[1]::uuid)
+          );
+      end if;
+    end $$;
+    `,
+    // DELETE: eliminar imagen del propio negocio
+    `
+    do $$ begin
+      if not exists (
+        select 1 from pg_policies
+        where schemaname='storage' and tablename='objects'
+        and policyname='product_images_delete_own_business'
+      ) then
+        create policy "product_images_delete_own_business"
+          on storage.objects for delete
+          using (
             bucket_id = 'product-images'
             and auth.role() = 'authenticated'
             and public.has_business_access((storage.foldername(name))[1]::uuid)
