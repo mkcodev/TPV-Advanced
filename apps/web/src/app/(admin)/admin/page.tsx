@@ -1,4 +1,4 @@
-import { getActiveBusinessServer } from '@/lib/business/active';
+import { getActiveBusinessServer } from '@/lib/business/active.server';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 
