@@ -9,12 +9,9 @@ export function TpvOrderSidebar() {
       {/* Header */}
       <div className="flex h-11 items-center justify-between border-b border-border px-4">
         <span className="text-sm font-semibold text-foreground">{t('title')}</span>
-        <button
-          type="button"
-          className="min-h-[44px] min-w-[44px] text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
+        <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
           {t('clear')}
-        </button>
+        </Button>
       </div>
 
       {/* Empty state */}
