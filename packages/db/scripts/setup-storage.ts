@@ -143,7 +143,9 @@ async function main() {
     }
 
     if (rows.length < 4) {
-      console.warn('⚠ Se esperaban 4 políticas; puede que algunas ya existieran con nombre diferente.');
+      console.warn(
+        '⚠ Se esperaban 4 políticas; puede que algunas ya existieran con nombre diferente.',
+      );
     }
   } finally {
     await sql.end();

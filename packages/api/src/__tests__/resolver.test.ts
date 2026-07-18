@@ -26,7 +26,6 @@ function makeDb(device: { id: string; businessId: string } | null): Database {
     query: {
       businesses: { findFirst: () => Promise.resolve(null) },
     },
-    // biome-ignore lint/suspicious/noExplicitAny: stub
   } as unknown as Database;
 }
 
@@ -49,7 +48,6 @@ function makeAdminDb(hasAccess: boolean): Database {
         where: () => Promise.resolve(),
       }),
     }),
-    // biome-ignore lint/suspicious/noExplicitAny: stub
   } as unknown as Database;
 }
 
