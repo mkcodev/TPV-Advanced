@@ -9,6 +9,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
+    "db:setup-storage": "tsx scripts/setup-storage.ts",
     "test": "vitest run --exclude \"**/*.integration.test.ts\"",
     "test:integration": "vitest run rls-isolation",
     "typecheck": "tsc --noEmit"

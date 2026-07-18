@@ -56,6 +56,9 @@ importers:
       '@trpc/server':
         specifier: ^11.0.0
         version: 11.18.0(typescript@5.9.3)
+      lucide-react:
+        specifier: ^0.460.0
+        version: 0.460.0(react@19.2.4)
       next:
         specifier: 16.2.10
         version: 16.2.10(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -71,6 +74,9 @@ importers:
       react-hook-form:
         specifier: ^7.54.0
         version: 7.82.0(react@19.2.4)
+      sonner:
+        specifier: ^1.5.0
+        version: 1.7.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       zod:
         specifier: ^3.23.8
         version: 3.25.76

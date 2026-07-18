@@ -194,6 +194,7 @@ const productsRouter = router({
       ...(rest.isCombo !== undefined && { isCombo: rest.isCombo }),
       ...(rest.trackStock !== undefined && { trackStock: rest.trackStock }),
       ...(rest.displayOrder !== undefined && { displayOrder: rest.displayOrder }),
+      ...(rest.basePriceCents !== undefined && { basePriceCents: rest.basePriceCents }),
       ...(categoryId !== undefined && { categoryId }),
       ...(taxRate !== undefined && { taxRate: toTaxRate(taxRate) }),
     };

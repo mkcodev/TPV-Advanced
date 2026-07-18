@@ -300,6 +300,59 @@ describe('catalog.variants.create', () => {
   });
 });
 
+// ── products.update — basePriceCents se aplica al SET ────────────────────
+
+describe('catalog.products.update', () => {
+  const PROD = {
+    id: '00000000-0000-0000-0000-000000000020',
+    businessId: 'biz-1',
+    categoryId: '00000000-0000-0000-0000-000000000010',
+    name: 'Cerveza',
+    basePriceCents: 300,
+    taxRate: '10.00',
+    description: null,
+    imageUrl: null,
+    allergens: [],
+    sku: null,
+    isCombo: false,
+    trackStock: false,
+    displayOrder: 0,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it('applies basePriceCents to the SET patch when provided', async () => {
+    const { db, calls } = queuedDb([
+      OWNER_ROLE, // getMembershipRole
+      [PROD], // update.returning()
+    ]);
+    const caller = createCaller({ ...adminCtx('biz-1'), db });
+    const result = await caller.catalog.products.update({
+      id: PROD.id,
+      basePriceCents: 300,
+    });
+
+    const setCall = calls.find((c) => c.method === 'set');
+    const patch = (setCall?.args[0] ?? {}) as Record<string, unknown>;
+    expect(patch.basePriceCents).toBe(300);
+    expect(result.basePriceCents).toBe(300);
+  });
+
+  it('does NOT include basePriceCents in SET when not provided', async () => {
+    const { db, calls } = queuedDb([
+      OWNER_ROLE, // getMembershipRole
+      [PROD], // update.returning()
+    ]);
+    const caller = createCaller({ ...adminCtx('biz-1'), db });
+    await caller.catalog.products.update({ id: PROD.id, name: 'Caña' });
+
+    const setCall = calls.find((c) => c.method === 'set');
+    const patch = (setCall?.args[0] ?? {}) as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('basePriceCents');
+  });
+});
+
 // ── variants.update — aislamiento via subquery ───────────────────────────
 
 describe('catalog.variants.update', () => {

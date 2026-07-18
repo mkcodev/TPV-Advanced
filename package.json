@@ -13,7 +13,8 @@
     "test:e2e": "turbo run test:e2e",
     "db:generate": "pnpm --filter @tpv/db db:generate",
     "db:migrate": "pnpm --filter @tpv/db db:migrate",
-    "db:seed": "pnpm --filter @tpv/db db:seed"
+    "db:seed": "pnpm --filter @tpv/db db:seed",
+    "db:setup-storage": "pnpm --filter @tpv/db db:setup-storage"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -34,6 +34,126 @@
     "dashboard": {
       "title": "Panel de administración",
       "logout": "Cerrar sesión"
+    },
+    "catalog": {
+      "title": "Catálogo",
+      "tabs": {
+        "categories": "Categorías",
+        "products": "Productos"
+      },
+      "categories": {
+        "title": "Categorías",
+        "new": "Nueva categoría",
+        "edit": "Editar categoría",
+        "empty": "No hay categorías todavía",
+        "emptyCta": "Crea la primera categoría",
+        "columns": {
+          "name": "Nombre",
+          "printDestination": "Destino impresión",
+          "order": "Orden",
+          "active": "Activo",
+          "actions": "Acciones"
+        },
+        "fields": {
+          "name": "Nombre",
+          "namePlaceholder": "Ej: Bebidas",
+          "printDestination": "Destino de impresión",
+          "displayOrder": "Orden de visualización"
+        },
+        "deactivate": {
+          "title": "Desactivar categoría",
+          "description": "Los productos de esta categoría quedarán ocultos en el TPV. ¿Continuar?",
+          "confirm": "Desactivar"
+        },
+        "toast": {
+          "created": "Categoría creada",
+          "updated": "Categoría actualizada",
+          "activated": "Categoría activada",
+          "deactivated": "Categoría desactivada",
+          "reordered": "Orden actualizado",
+          "error": "Error al guardar la categoría"
+        }
+      },
+      "products": {
+        "title": "Productos",
+        "new": "Nuevo producto",
+        "edit": "Editar producto",
+        "empty": "No hay productos todavía",
+        "emptyCta": "Crea el primer producto",
+        "filterAll": "Todas las categorías",
+        "columns": {
+          "image": "Foto",
+          "name": "Nombre",
+          "category": "Categoría",
+          "price": "Precio",
+          "taxRate": "IVA",
+          "allergens": "Alérgenos",
+          "order": "Orden",
+          "active": "Activo",
+          "actions": "Acciones"
+        },
+        "fields": {
+          "name": "Nombre",
+          "namePlaceholder": "Ej: Café con leche",
+          "description": "Descripción",
+          "descriptionPlaceholder": "Descripción opcional del producto",
+          "category": "Categoría",
+          "price": "Precio (€)",
+          "pricePlaceholder": "0.00",
+          "taxRate": "Tipo de IVA",
+          "sku": "SKU / Referencia",
+          "skuPlaceholder": "Referencia interna (opcional)",
+          "allergens": "Alérgenos",
+          "image": "Foto del producto"
+        },
+        "taxRate": {
+          "iva0": "0% — Exento",
+          "iva4": "4% — Superreducido",
+          "iva10": "10% — Reducido",
+          "iva21": "21% — General"
+        },
+        "image": {
+          "upload": "Subir foto",
+          "uploading": "Subiendo...",
+          "remove": "Quitar foto",
+          "hint": "PNG, JPG o WebP · Máx 2 MB"
+        },
+        "deactivate": {
+          "title": "Desactivar producto",
+          "description": "El producto quedará oculto en el TPV. ¿Continuar?",
+          "confirm": "Desactivar"
+        },
+        "toast": {
+          "created": "Producto creado",
+          "updated": "Producto actualizado",
+          "activated": "Producto activado",
+          "deactivated": "Producto desactivado",
+          "reordered": "Orden actualizado",
+          "error": "Error al guardar el producto",
+          "imageError": "Error al subir la imagen"
+        }
+      },
+      "printDestination": {
+        "kitchen": "Cocina",
+        "bar": "Barra",
+        "none": "Sin impresión"
+      },
+      "allergens": {
+        "gluten": "Gluten",
+        "crustaceans": "Crustáceos",
+        "eggs": "Huevos",
+        "fish": "Pescado",
+        "peanuts": "Cacahuetes",
+        "soybeans": "Soja",
+        "milk": "Leche",
+        "nuts": "Frutos secos",
+        "celery": "Apio",
+        "mustard": "Mostaza",
+        "sesame": "Sésamo",
+        "sulphites": "Sulfitos",
+        "lupin": "Altramuces",
+        "molluscs": "Moluscos"
+      }
     }
   },
   "tpv": {
