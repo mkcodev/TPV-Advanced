@@ -12,7 +12,8 @@
     "test": "pnpm -r --if-present run test",
     "test:e2e": "turbo run test:e2e",
     "db:generate": "pnpm --filter @tpv/db db:generate",
-    "db:migrate": "pnpm --filter @tpv/db db:migrate"
+    "db:migrate": "pnpm --filter @tpv/db db:migrate",
+    "db:seed": "pnpm --filter @tpv/db db:seed"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

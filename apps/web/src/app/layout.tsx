@@ -1,3 +1,4 @@
+import { TRPCProvider } from '@/lib/trpc/provider';
 import { Toaster } from '@tpv/ui';
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
@@ -34,8 +35,10 @@ export default async function RootLayout({
     <html lang={locale} className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
-          <Toaster />
+          <TRPCProvider>
+            {children}
+            <Toaster />
+          </TRPCProvider>
         </NextIntlClientProvider>
       </body>
     </html>

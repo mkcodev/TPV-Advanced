@@ -8,6 +8,7 @@
   "scripts": {
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run --exclude \"**/*.integration.test.ts\"",
     "test:integration": "vitest run rls-isolation",
     "typecheck": "tsc --noEmit"
@@ -17,10 +18,11 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.48",
+    "@supabase/supabase-js": "^2.48.0",
     "@types/node": "^20",
     "dotenv": "^16.5.0",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.0"
   }

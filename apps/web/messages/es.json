@@ -16,6 +16,26 @@
     "remove": "Quitar",
     "search": "Buscar"
   },
+  "admin": {
+    "login": {
+      "title": "Acceso administración",
+      "email": "Email",
+      "password": "Contraseña",
+      "submit": "Entrar",
+      "submitting": "Entrando...",
+      "error": "Email o contraseña incorrectos"
+    },
+    "selectBusiness": {
+      "title": "Elige un negocio",
+      "subtitle": "Selecciona el negocio con el que quieres trabajar",
+      "empty": "No tienes negocios asignados",
+      "access": "Acceder"
+    },
+    "dashboard": {
+      "title": "Panel de administración",
+      "logout": "Cerrar sesión"
+    }
+  },
   "tpv": {
     "header": {
       "businessName": "Mi Negocio",

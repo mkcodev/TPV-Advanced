@@ -9,6 +9,15 @@ export const createCallerFactory = t.createCallerFactory;
 // Endpoints sin auth (salud, carta pública...).
 export const publicProcedure = t.procedure;
 
+// Requiere JWT de Supabase pero NO exige business activo — se usa para operaciones
+// previas a la selección de negocio (listar memberships, onboarding...).
+export const adminAuthedProcedure = t.procedure.use(({ ctx, next }) => {
+  if (ctx.auth.kind !== 'admin') {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+  return next({ ctx: { ...ctx, userId: ctx.auth.userId } });
+});
+
 // REGLA DE ORO: business_id JAMÁS es input de un endpoint — siempre sale del
 // contexto de auth. Este middleware es la defensa PRIMARIA multi-tenant: toda
 // consulta de dominio se construye sobre ctx.businessId, nunca sobre el cliente.
