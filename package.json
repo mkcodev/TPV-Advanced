@@ -8,8 +8,8 @@
     "build": "turbo run build",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r --if-present run test",
     "test:e2e": "turbo run test:e2e",
     "db:generate": "pnpm --filter @tpv/db db:generate",
     "db:migrate": "pnpm --filter @tpv/db db:migrate"
