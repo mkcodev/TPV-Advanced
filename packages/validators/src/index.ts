@@ -32,3 +32,147 @@ export const revokeDeviceSchema = z.object({
   deviceId: z.string().uuid('Invalid device ID'),
 });
 export type RevokeDeviceInput = z.infer<typeof revokeDeviceSchema>;
+
+// Catalog schemas
+
+// Mirrored from packages/db/src/schema/catalog.ts to keep validators dep-free.
+const PRINT_DESTINATIONS = ['kitchen', 'bar', 'none'] as const;
+const ALLERGENS = [
+  'gluten',
+  'crustaceans',
+  'eggs',
+  'fish',
+  'peanuts',
+  'soybeans',
+  'milk',
+  'nuts',
+  'celery',
+  'mustard',
+  'sesame',
+  'sulphites',
+  'lupin',
+  'molluscs',
+] as const;
+
+// Shared building blocks
+export const idOnlySchema = z.object({ id: z.string().uuid() }).strict();
+export type IdOnlyInput = z.infer<typeof idOnlySchema>;
+
+export const setActiveSchema = z
+  .object({
+    id: z.string().uuid(),
+    isActive: z.boolean(),
+  })
+  .strict();
+export type SetActiveInput = z.infer<typeof setActiveSchema>;
+
+export const reorderSchema = z
+  .object({
+    items: z
+      .array(z.object({ id: z.string().uuid(), displayOrder: z.number().int().min(0) }).strict())
+      .min(1),
+  })
+  .strict();
+export type ReorderInput = z.infer<typeof reorderSchema>;
+
+export const listByCategorySchema = z
+  .object({
+    categoryId: z.string().uuid().optional(),
+    includeInactive: z.boolean().optional(),
+  })
+  .strict();
+export type ListByCategoryInput = z.infer<typeof listByCategorySchema>;
+
+export const listByProductSchema = z
+  .object({
+    productId: z.string().uuid(),
+  })
+  .strict();
+export type ListByProductInput = z.infer<typeof listByProductSchema>;
+
+// Product categories
+export const createCategorySchema = z
+  .object({
+    name: z.string().min(1, 'Name is required'),
+    printDestination: z.enum(PRINT_DESTINATIONS),
+    parentId: z.string().uuid().optional(),
+    color: z.string().optional(),
+    icon: z.string().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+
+export const updateCategorySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1).optional(),
+    printDestination: z.enum(PRINT_DESTINATIONS).optional(),
+    parentId: z.string().uuid().nullable().optional(),
+    color: z.string().nullable().optional(),
+    icon: z.string().nullable().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+
+// Products
+export const createProductSchema = z
+  .object({
+    categoryId: z.string().uuid(),
+    name: z.string().min(1, 'Name is required'),
+    basePriceCents: z.number().int().min(0),
+    taxRate: z.number().min(0).max(100),
+    description: z.string().optional(),
+    imageUrl: z.string().url().optional(),
+    allergens: z.array(z.enum(ALLERGENS)).optional(),
+    sku: z.string().optional(),
+    isCombo: z.boolean().optional(),
+    trackStock: z.boolean().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type CreateProductInput = z.infer<typeof createProductSchema>;
+
+export const updateProductSchema = z
+  .object({
+    id: z.string().uuid(),
+    categoryId: z.string().uuid().optional(),
+    name: z.string().min(1).optional(),
+    basePriceCents: z.number().int().min(0).optional(),
+    taxRate: z.number().min(0).max(100).optional(),
+    description: z.string().nullable().optional(),
+    imageUrl: z.string().url().nullable().optional(),
+    allergens: z.array(z.enum(ALLERGENS)).optional(),
+    sku: z.string().nullable().optional(),
+    isCombo: z.boolean().optional(),
+    trackStock: z.boolean().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+
+// Product variants
+export const createVariantSchema = z
+  .object({
+    productId: z.string().uuid(),
+    name: z.string().min(1, 'Name is required'),
+    priceCents: z.number().int().min(0),
+    sku: z.string().optional(),
+    isDefault: z.boolean().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type CreateVariantInput = z.infer<typeof createVariantSchema>;
+
+export const updateVariantSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1).optional(),
+    priceCents: z.number().int().min(0).optional(),
+    sku: z.string().nullable().optional(),
+    isDefault: z.boolean().optional(),
+    displayOrder: z.number().int().min(0).optional(),
+  })
+  .strict();
+export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
