@@ -66,3 +66,51 @@ export {
   TooltipContent,
   TooltipProvider,
 } from './components/tooltip';
+export { Avatar, AvatarImage, AvatarFallback } from './components/avatar';
+export {
+  AlertDialog,
+  AlertDialogPortal,
+  AlertDialogOverlay,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from './components/alert-dialog';
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectLabel,
+  SelectItem,
+  SelectSeparator,
+  SelectScrollUpButton,
+  SelectScrollDownButton,
+} from './components/select';
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableCaption,
+} from './components/table';
+export { ScrollArea, ScrollBar } from './components/scroll-area';
+export {
+  Form,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription,
+  FormMessage,
+  FormField,
+} from './components/form';
+export { Switch } from './components/switch';
+export { Checkbox } from './components/checkbox';
