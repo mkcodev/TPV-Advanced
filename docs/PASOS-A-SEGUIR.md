@@ -140,6 +140,14 @@ Sigue `ROADMAP-Y-PROMPTS.md` con el mismo bucle:
 
 ---
 
+## Deuda técnica documentada
+
+> Items que se decidió NO implementar ahora pero que hay que abordar antes de que el bucket crezca o cause problemas.
+
+- **Imágenes huérfanas en Storage** (`image-uploader.tsx`, TODO marcado en el código): al reemplazar o eliminar la foto de un producto, el objeto anterior queda en el bucket `product-images`. La política `product_images_delete_own_business` (en `packages/db/scripts/setup-storage.ts`) ya permite borrar objetos. La solución es extraer la ruta del antiguo `imageUrl` antes de sobrescribir y llamar a `supabase.storage.from('product-images').remove([path])`. Fácil de añadir a `ImageUploader`. Hacer antes de poner en producción para no acumular cientos de imágenes de fotos de prueba.
+
+---
+
 ## Reglas que no se saltan nunca (resumen)
 
 - Una tarea cada vez → revisar diff → `lint`/`typecheck`/`test` → commit.

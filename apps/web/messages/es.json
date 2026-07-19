@@ -116,7 +116,16 @@
           "upload": "Subir foto",
           "uploading": "Subiendo...",
           "remove": "Quitar foto",
-          "hint": "PNG, JPG o WebP · Máx 2 MB"
+          "hint": "PNG, JPG o WebP · Máx 15 MB · Se recortará en cuadrado",
+          "cropTitle": "Recortar foto",
+          "cropDescription": "Ajusta el encuadre. La foto se recortará en cuadrado.",
+          "zoomLabel": "Zoom",
+          "cropApply": "Aplicar",
+          "cropCancel": "Cancelar",
+          "errorTooLarge": "La foto es demasiado grande (máx 15 MB).",
+          "errorTooManyPixels": "La resolución de la foto es excesiva. Reduce el tamaño antes de subirla.",
+          "errorInvalidType": "Formato no admitido. Usa PNG, JPG o WebP.",
+          "errorCropFailed": "No se pudo procesar la foto. Prueba con otra."
         },
         "deactivate": {
           "title": "Desactivar producto",

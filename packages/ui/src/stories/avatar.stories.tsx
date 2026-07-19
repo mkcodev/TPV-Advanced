@@ -27,6 +27,45 @@ export const Fallback: Story = {
   ),
 };
 
+// Verifica que una imagen rectangular NO se deforma (regresión del bug sin object-cover).
+export const RectangularSource: Story = {
+  render: () => (
+    <div className="flex gap-4 items-end">
+      <div className="flex flex-col items-center gap-1">
+        <Avatar className="h-16 w-16 rounded-md">
+          <AvatarImage
+            src="https://picsum.photos/seed/wide/400/200"
+            alt="Imagen apaisada 2:1"
+          />
+          <AvatarFallback className="rounded-md">AP</AvatarFallback>
+        </Avatar>
+        <span className="text-xs text-muted-foreground">400×200 (2:1)</span>
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <Avatar className="h-16 w-16 rounded-md">
+          <AvatarImage
+            src="https://picsum.photos/seed/tall/200/400"
+            alt="Imagen vertical 1:2"
+          />
+          <AvatarFallback className="rounded-md">VT</AvatarFallback>
+        </Avatar>
+        <span className="text-xs text-muted-foreground">200×400 (1:2)</span>
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <Avatar className="h-16 w-16 rounded-md">
+          <AvatarImage
+            src="https://picsum.photos/seed/square/300/300"
+            alt="Imagen cuadrada 1:1"
+          />
+          <AvatarFallback className="rounded-md">SQ</AvatarFallback>
+        </Avatar>
+        <span className="text-xs text-muted-foreground">300×300 (1:1)</span>
+      </div>
+    </div>
+  ),
+  parameters: { layout: 'padded' },
+};
+
 export const EmployeeChips: Story = {
   render: () => (
     <div className="flex gap-3">

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check .",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -27,6 +28,7 @@
     "next-intl": "^4.13.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-easy-crop": "^5.5.0",
     "react-hook-form": "^7.54.0",
     "sonner": "^1.5.0",
     "zod": "^3.23.8"
@@ -37,7 +39,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^16.4.7",
+    "happy-dom": "^15.11.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.0"
   }
 }

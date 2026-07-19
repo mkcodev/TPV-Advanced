@@ -115,3 +115,4 @@ export {
 } from './components/form';
 export { Switch } from './components/switch';
 export { Checkbox } from './components/checkbox';
+export { Slider, type SliderProps } from './components/slider';

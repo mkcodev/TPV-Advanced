@@ -11,9 +11,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
   Badge,
   Button,
   Skeleton,
@@ -25,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@tpv/ui';
+import { ProductThumbnail } from '@/components/catalog/product-thumbnail';
 import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -157,12 +155,7 @@ export function ProductsTable({ products, categories, isLoading }: Props) {
           {sorted.map((product, index) => (
             <TableRow key={product.id}>
               <TableCell>
-                <Avatar className="h-8 w-8 rounded-md">
-                  <AvatarImage src={product.imageUrl ?? undefined} alt={product.name} />
-                  <AvatarFallback className="rounded-md text-xs">
-                    {product.name.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <ProductThumbnail src={product.imageUrl} name={product.name} size="sm" />
               </TableCell>
               <TableCell className="font-medium">{product.name}</TableCell>
               <TableCell className="text-sm text-muted-foreground">
