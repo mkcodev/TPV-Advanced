@@ -49,6 +49,20 @@ se indica cuál lanzar y en qué orden).
 > Lee esto antes de tocar la base de datos.
 
 - **Dos entornos en Supabase:** `tpv-dev` (para desarrollar y probar) y `tpv-prod` (el bar real). Las credenciales de producción **nunca** van en el repo ni en `.env` local.
+
+### Fuente de verdad de variables de entorno
+
+**Una sola fuente: el `.env` de la raíz del monorepo.**
+
+| Archivo | Qué contiene | Por qué |
+|---|---|---|
+| `.env` (raíz) | `DATABASE_URL`, `AUTH_SESSION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Una sola fuente de verdad. `next.config.ts` lo carga automáticamente con dotenv. |
+| `apps/web/.env.local` | **Solo** `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Valores de cliente que Next.js necesita exponer al navegador durante el dev. |
+
+> ⚠️ **No dupliques** `DATABASE_URL` ni `AUTH_SESSION_SECRET` en `apps/web/.env.local`. `next.config.ts` los toma del `.env` de la raíz antes de que el servidor arranque, así que los route handlers de tRPC los ven sin configuración extra.
+>
+> En producción (Vercel), inyecta las variables directamente en el panel de Vercel — el `.env` de la raíz no viaja al servidor de despliegue.
+
 - **Migraciones solo vía comandos:** nunca editar tablas manualmente en el panel de Supabase. El flujo siempre es:
   1. Editar el esquema en `packages/db/src/schema/`.
   2. `pnpm db:generate` → genera el archivo de migración SQL.
