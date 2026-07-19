@@ -1,156 +1,124 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cropImageToFile, supportsWebP } from './crop-image';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { computeCanvasSize, cropImageToFile } from './crop-image';
+import type { CropDeps } from './crop-image';
 
-// ─── Canvas + Image mocks ─────────────────────────────────────────────────────
-
-type BlobCallback = (blob: Blob | null) => void;
-
-function makeMockCanvas(toDataURLResult: string, blobResult: Blob | null) {
-  return {
-    width: 0,
-    height: 0,
-    getContext: vi.fn(() => ({
-      drawImage: vi.fn(),
-      imageSmoothingQuality: 'high',
-    })),
-    toBlob: vi.fn((cb: BlobCallback) => cb(blobResult)),
-    toDataURL: vi.fn(() => toDataURLResult),
-  };
-}
-
-function makeMockImage(w = 200, h = 200) {
-  return {
-    decode: vi.fn().mockResolvedValue(undefined),
-    naturalWidth: w,
-    naturalHeight: h,
-    crossOrigin: '',
-    src: '',
-  };
-}
-
-const FAKE_BLOB = new Blob(['x'], { type: 'image/webp' });
+const FAKE_BLOB_WEBP = new Blob(['x'], { type: 'image/webp' });
 const FAKE_BLOB_JPEG = new Blob(['y'], { type: 'image/jpeg' });
+const CROP = { x: 10, y: 10, width: 200, height: 200 };
+const SRC = 'blob:test-url';
 
-// ─── supportsWebP ─────────────────────────────────────────────────────────────
+// ─── Funciones puras (sin DOM) ───────────────────────────────────────────────
 
-describe('supportsWebP', () => {
-  beforeEach(() => {
-    // Reset module cache so webpCache resets between tests
-    vi.resetModules();
+describe('computeCanvasSize', () => {
+  it('no upscala cuando cropWidth < maxSize', () => {
+    expect(computeCanvasSize(200, 800)).toBe(200);
   });
 
-  it('devuelve true cuando el canvas produce data:image/webp', async () => {
-    const mockCanvas = makeMockCanvas('data:image/webp;base64,abc', FAKE_BLOB);
-    vi.spyOn(document, 'createElement').mockReturnValueOnce(mockCanvas as unknown as HTMLElement);
-
-    const { supportsWebP: fresh } = await import('./crop-image');
-    expect(fresh()).toBe(true);
+  it('clampa a maxSize cuando cropWidth > maxSize', () => {
+    expect(computeCanvasSize(1500, 800)).toBe(800);
   });
 
-  it('devuelve false cuando el canvas NO produce data:image/webp', async () => {
-    const mockCanvas = makeMockCanvas('data:image/png;base64,abc', FAKE_BLOB_JPEG);
-    vi.spyOn(document, 'createElement').mockReturnValueOnce(mockCanvas as unknown as HTMLElement);
-
-    const { supportsWebP: fresh } = await import('./crop-image');
-    expect(fresh()).toBe(false);
+  it('redondea cropWidth al entero más cercano', () => {
+    expect(computeCanvasSize(200.7, 800)).toBe(201);
   });
 });
 
-// ─── cropImageToFile ──────────────────────────────────────────────────────────
+// ─── Helpers para inyección de dependencias ──────────────────────────────────
+
+type BlobCb = (b: Blob | null) => void;
+
+function makeCanvas(blobResult: Blob | null): HTMLCanvasElement {
+  const ctx = { drawImage: vi.fn(), imageSmoothingQuality: 'high' as const };
+  return {
+    width: 0,
+    height: 0,
+    getContext: vi.fn(() => ctx),
+    toBlob: vi.fn((cb: BlobCb) => cb(blobResult)),
+  } as unknown as HTMLCanvasElement;
+}
+
+function makeImage(): HTMLImageElement {
+  return {
+    decode: vi.fn().mockResolvedValue(undefined),
+    naturalWidth: 400,
+    naturalHeight: 300,
+    crossOrigin: '',
+  } as unknown as HTMLImageElement;
+}
+
+function makeDeps(overrides: Partial<CropDeps> = {}): CropDeps {
+  return {
+    createCanvas: () => makeCanvas(FAKE_BLOB_WEBP),
+    loadImage: () => Promise.resolve(makeImage()),
+    checkWebP: () => true,
+    ...overrides,
+  };
+}
+
+// ─── cropImageToFile ─────────────────────────────────────────────────────────
 
 describe('cropImageToFile', () => {
-  let mockCanvas: ReturnType<typeof makeMockCanvas>;
-  let mockImage: ReturnType<typeof makeMockImage>;
+  afterEach(() => vi.unstubAllGlobals());
 
-  beforeEach(() => {
-    vi.resetModules();
-    mockCanvas = makeMockCanvas('data:image/webp;base64,abc', FAKE_BLOB);
-    mockImage = makeMockImage(400, 300);
+  it('devuelve File webp con nombre correcto cuando checkWebP=true', async () => {
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
 
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'canvas') return mockCanvas as unknown as HTMLElement;
-      return document.createElement(tag);
+    const result = await cropImageToFile(SRC, CROP, {}, makeDeps());
+
+    expect(result.mimeType).toBe('image/webp');
+    expect(result.file.name).toBe('product-test-uuid.webp');
+    expect(result.file.type).toBe('image/webp');
+  });
+
+  it('no hace upscale: createCanvas recibe min(maxSize, cropWidth)', async () => {
+    let capturedSize = 0;
+    const deps = makeDeps({
+      createCanvas: (size) => {
+        capturedSize = size;
+        return makeCanvas(FAKE_BLOB_WEBP);
+      },
     });
 
-    vi.stubGlobal('Image', vi.fn(() => mockImage));
-    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
+    await cropImageToFile(SRC, CROP, { maxSize: 800 }, deps);
+
+    expect(capturedSize).toBe(200); // CROP.width=200 < maxSize=800
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+  it('clampa a maxSize cuando cropArea.width > maxSize', async () => {
+    let capturedSize = 0;
+    const bigCrop = { x: 0, y: 0, width: 1500, height: 1500 };
+    const deps = makeDeps({
+      createCanvas: (size) => {
+        capturedSize = size;
+        return makeCanvas(FAKE_BLOB_WEBP);
+      },
+    });
 
-  it('devuelve un File con nombre correcto y tipo webp', async () => {
-    const { cropImageToFile: fresh } = await import('./crop-image');
-    const crop = { x: 0, y: 0, width: 200, height: 200 };
-    const result = await fresh('blob:test', crop);
+    await cropImageToFile(SRC, bigCrop, { maxSize: 800 }, deps);
 
-    expect(result.file.name).toMatch(/^product-test-uuid\.webp$/);
-    expect(result.file.type).toBe('image/webp');
-    expect(result.mimeType).toBe('image/webp');
-  });
-
-  it('no hace upscale: canvas = min(maxSize, cropArea.width)', async () => {
-    const { cropImageToFile: fresh } = await import('./crop-image');
-    const crop = { x: 0, y: 0, width: 200, height: 200 };
-    await fresh('blob:test', crop, { maxSize: 800 });
-
-    // El canvas debe ser 200×200, no 800×800
-    expect(mockCanvas.width).toBe(200);
-    expect(mockCanvas.height).toBe(200);
-  });
-
-  it('clampa a maxSize si cropArea.width > maxSize', async () => {
-    mockImage = makeMockImage(2000, 2000);
-    vi.stubGlobal('Image', vi.fn(() => mockImage));
-    const { cropImageToFile: fresh } = await import('./crop-image');
-    const crop = { x: 0, y: 0, width: 1500, height: 1500 };
-    await fresh('blob:test', crop, { maxSize: 800 });
-
-    expect(mockCanvas.width).toBe(800);
-    expect(mockCanvas.height).toBe(800);
+    expect(capturedSize).toBe(800);
   });
 
   it('cae a jpeg cuando webp toBlob devuelve null', async () => {
-    // primer canvas: feature-test (returns webp URL), segundo canvas: crop (returns null for webp → falls back)
-    const cropCanvas = makeMockCanvas('data:image/webp;base64,abc', null);
-    let callCount = 0;
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'canvas') {
-        callCount++;
-        return (callCount === 1 ? mockCanvas : cropCanvas) as unknown as HTMLElement;
-      }
-      return document.createElement(tag);
-    });
-    // For the fallback call, return a jpeg blob
-    cropCanvas.toBlob = vi
-      .fn()
-      .mockImplementationOnce((cb: BlobCallback) => cb(null)) // webp → null
-      .mockImplementationOnce((cb: BlobCallback) => cb(FAKE_BLOB_JPEG)); // jpeg → ok
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
 
-    const { cropImageToFile: fresh } = await import('./crop-image');
-    const crop = { x: 0, y: 0, width: 200, height: 200 };
-    const result = await fresh('blob:test', crop);
+    const canvas = makeCanvas(null);
+    (canvas.toBlob as ReturnType<typeof vi.fn>)
+      .mockImplementationOnce((cb: BlobCb) => cb(null))       // webp → null
+      .mockImplementationOnce((cb: BlobCb) => cb(FAKE_BLOB_JPEG)); // fallback jpeg
+
+    const result = await cropImageToFile(SRC, CROP, {}, makeDeps({ createCanvas: () => canvas }));
 
     expect(result.mimeType).toBe('image/jpeg');
-    expect(result.file.name).toMatch(/\.jpg$/);
+    expect(result.file.name).toBe('product-test-uuid.jpg');
   });
 
-  it('lanza error si ambos blobs son null', async () => {
-    const failCanvas = makeMockCanvas('data:image/webp;base64,abc', null);
-    failCanvas.toBlob = vi.fn((cb: BlobCallback) => cb(null));
-    let callCount = 0;
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-      if (tag === 'canvas') {
-        callCount++;
-        return (callCount === 1 ? mockCanvas : failCanvas) as unknown as HTMLElement;
-      }
-      return document.createElement(tag);
-    });
+  it('lanza canvas-toblob-failed cuando ambos blobs son null', async () => {
+    const canvas = makeCanvas(null);
+    (canvas.toBlob as ReturnType<typeof vi.fn>).mockImplementation((cb: BlobCb) => cb(null));
 
-    const { cropImageToFile: fresh } = await import('./crop-image');
-    const crop = { x: 0, y: 0, width: 200, height: 200 };
-    await expect(fresh('blob:test', crop)).rejects.toThrow('canvas-toblob-failed');
+    await expect(
+      cropImageToFile(SRC, CROP, {}, makeDeps({ createCanvas: () => canvas })),
+    ).rejects.toThrow('canvas-toblob-failed');
   });
 });

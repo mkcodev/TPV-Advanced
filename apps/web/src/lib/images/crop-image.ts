@@ -1,6 +1,16 @@
 export type CropArea = { x: number; y: number; width: number; height: number };
 export type CropOutput = { file: File; mimeType: 'image/webp' | 'image/jpeg'; width: number; height: number };
 export type CropOptions = { maxSize?: number; quality?: number };
+export type CropDeps = {
+  createCanvas?: (size: number) => HTMLCanvasElement;
+  loadImage?: (src: string) => Promise<HTMLImageElement>;
+  checkWebP?: () => boolean;
+};
+
+/** Pure: target canvas side length — never upscales. */
+export function computeCanvasSize(cropWidth: number, maxSize: number): number {
+  return Math.min(maxSize, Math.round(cropWidth));
+}
 
 let webpCache: boolean | undefined;
 
@@ -23,30 +33,25 @@ function canvasToBlob(
 }
 
 /**
- * Crops `sourceUrl` (an objectURL) to `cropArea` and returns a compressed File.
- * Output size is clamped to `maxSize` (default 800) — never upscaled.
- * Prefers WebP; falls back to JPEG if the browser doesn't support WebP encoding.
+ * Crops `sourceUrl` to `cropArea` and returns a compressed File.
+ * Pass `deps` to inject a fake canvas / image loader in tests.
  */
 export async function cropImageToFile(
   sourceUrl: string,
   cropArea: CropArea,
   options: CropOptions = {},
+  deps: CropDeps = {},
 ): Promise<CropOutput> {
   const maxSize = options.maxSize ?? 800;
   const quality = options.quality ?? 0.85;
 
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = sourceUrl;
-  // decode() awaits load + auto-applies EXIF orientation on modern browsers
-  await img.decode();
+  const loadImage = deps.loadImage ?? defaultLoadImage;
+  const createCanvas = deps.createCanvas ?? defaultCreateCanvas;
+  const checkWebP = deps.checkWebP ?? supportsWebP;
 
-  // Never upscale: clamp canvas size to the actual crop pixel width
-  const size = Math.min(maxSize, Math.round(cropArea.width));
-
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  const img = await loadImage(sourceUrl);
+  const size = computeCanvasSize(cropArea.width, maxSize);
+  const canvas = createCanvas(size);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas-2d-unavailable');
@@ -64,12 +69,11 @@ export async function cropImageToFile(
     size,
   );
 
-  const useWebP = supportsWebP();
+  const useWebP = checkWebP();
   const primaryMime = useWebP ? 'image/webp' : 'image/jpeg';
   let blob = await canvasToBlob(canvas, primaryMime, quality);
   let mimeType: 'image/webp' | 'image/jpeg' = primaryMime as 'image/webp' | 'image/jpeg';
 
-  // Fallback: if WebP blob is null (shouldn't happen after the feature test, but be safe)
   if (!blob && useWebP) {
     blob = await canvasToBlob(canvas, 'image/jpeg', quality);
     mimeType = 'image/jpeg';
@@ -84,4 +88,19 @@ export async function cropImageToFile(
   });
 
   return { file, mimeType, width: size, height: size };
+}
+
+function defaultCreateCanvas(size: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  return canvas;
+}
+
+async function defaultLoadImage(src: string): Promise<HTMLImageElement> {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = src;
+  await img.decode();
+  return img;
 }
