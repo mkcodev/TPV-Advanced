@@ -116,3 +116,42 @@ export {
 export { Switch } from './components/switch';
 export { Checkbox } from './components/checkbox';
 export { Slider, type SliderProps } from './components/slider';
+export { Collapsible, CollapsibleTrigger, CollapsibleContent } from './components/collapsible';
+export {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+  BreadcrumbEllipsis,
+} from './components/breadcrumb';
+export {
+  Sidebar,
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+  SidebarRail,
+  SidebarInput,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarContent,
+  SidebarSeparator,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupAction,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuAction,
+  SidebarMenuBadge,
+  SidebarMenuSkeleton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+  useSidebar,
+  type SidebarProviderProps,
+  type SidebarProps,
+} from './components/sidebar';
+export { useIsMobile } from './hooks/use-mobile';

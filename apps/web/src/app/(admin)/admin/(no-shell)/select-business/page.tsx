@@ -10,7 +10,7 @@ import { useEffect } from 'react';
 export default function SelectBusinessPage() {
   const t = useTranslations('admin.selectBusiness');
   const router = useRouter();
-  const { data, isLoading } = trpc.me.listMemberships.useQuery();
+  const { data, isLoading, error } = trpc.me.listMemberships.useQuery();
 
   // Auto-selección cuando hay un único negocio.
   useEffect(() => {
@@ -26,6 +26,16 @@ export default function SelectBusinessPage() {
   function handleSelect(businessId: string) {
     setActiveBusinessClient(businessId);
     router.push('/admin');
+  }
+
+  if (error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-sm text-destructive">
+          Error cargando negocios: {error.message} ({error.data?.code})
+        </p>
+      </main>
+    );
   }
 
   if (isLoading) {

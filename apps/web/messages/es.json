@@ -31,9 +31,51 @@
       "empty": "No tienes negocios asignados",
       "access": "Acceder"
     },
+    "nav": {
+      "groups": {
+        "operation": "Operación",
+        "management": "Gestión",
+        "analysis": "Análisis"
+      },
+      "home": "Inicio",
+      "catalog": "Catálogo",
+      "floor": "Sala y mesas",
+      "orders": "Comandas",
+      "cashbox": "Caja",
+      "employees": "Empleados",
+      "devices": "Dispositivos",
+      "inventory": "Inventario",
+      "customers": "Clientes",
+      "reports": "Informes",
+      "billing": "Facturación",
+      "settings": "Configuración",
+      "soonBadge": "Pronto",
+      "toggle": "Alternar menú",
+      "userMenu": "Menú de usuario",
+      "logout": "Cerrar sesión",
+      "switchBusiness": "Cambiar negocio"
+    },
     "dashboard": {
-      "title": "Panel de administración",
-      "logout": "Cerrar sesión"
+      "greeting": "Hola, {name}",
+      "subtitle": "¿Qué quieres hacer hoy?",
+      "quickAccess": {
+        "catalog": {
+          "title": "Catálogo",
+          "description": "Productos, precios y categorías"
+        },
+        "floor": {
+          "title": "Sala",
+          "description": "Estado de mesas en tiempo real"
+        },
+        "orders": {
+          "title": "Comandas",
+          "description": "Comandas abiertas y ticket"
+        },
+        "employees": {
+          "title": "Empleados",
+          "description": "Personal, PIN y horarios"
+        }
+      }
     },
     "catalog": {
       "title": "Catálogo",
