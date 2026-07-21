@@ -24,12 +24,11 @@ export const BreadcrumbList = React.forwardRef<
 ));
 BreadcrumbList.displayName = 'BreadcrumbList';
 
-export const BreadcrumbItem = React.forwardRef<
-  HTMLLIElement,
-  React.ComponentPropsWithoutRef<'li'>
->(({ className, ...props }, ref) => (
-  <li ref={ref} className={cn('inline-flex items-center gap-1.5', className)} {...props} />
-));
+export const BreadcrumbItem = React.forwardRef<HTMLLIElement, React.ComponentPropsWithoutRef<'li'>>(
+  ({ className, ...props }, ref) => (
+    <li ref={ref} className={cn('inline-flex items-center gap-1.5', className)} {...props} />
+  ),
+);
 BreadcrumbItem.displayName = 'BreadcrumbItem';
 
 export const BreadcrumbLink = React.forwardRef<
@@ -53,8 +52,6 @@ export const BreadcrumbPage = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <span
     ref={ref}
-    role="link"
-    aria-disabled="true"
     aria-current="page"
     className={cn('font-normal text-foreground', className)}
     {...props}

@@ -1,5 +1,10 @@
 export type CropArea = { x: number; y: number; width: number; height: number };
-export type CropOutput = { file: File; mimeType: 'image/webp' | 'image/jpeg'; width: number; height: number };
+export type CropOutput = {
+  file: File;
+  mimeType: 'image/webp' | 'image/jpeg';
+  width: number;
+  height: number;
+};
 export type CropOptions = { maxSize?: number; quality?: number };
 export type CropDeps = {
   createCanvas?: (size: number) => HTMLCanvasElement;
@@ -57,17 +62,7 @@ export async function cropImageToFile(
   if (!ctx) throw new Error('canvas-2d-unavailable');
 
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(
-    img,
-    cropArea.x,
-    cropArea.y,
-    cropArea.width,
-    cropArea.height,
-    0,
-    0,
-    size,
-    size,
-  );
+  ctx.drawImage(img, cropArea.x, cropArea.y, cropArea.width, cropArea.height, 0, 0, size, size);
 
   const useWebP = checkWebP();
   const primaryMime = useWebP ? 'image/webp' : 'image/jpeg';

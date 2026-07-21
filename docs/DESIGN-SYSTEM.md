@@ -331,6 +331,18 @@ Estas interacciones son **diferenciadores del producto**, no decoración. Cada u
 > No hardcodear el mapeo aquí para no quedar desactualizado con la versión de Tailwind: se hace
 > siguiendo la doc vigente de shadcn, pero **los valores** salen siempre de `tokens.css`.
 
+> **Regla crítica para Tailwind v4 — tokens de color:** al instalar un componente de shadcn que
+> introduzca tokens de color nuevos (p. ej. `sidebar`, `chart`), hay que mapearlos explícitamente en
+> el bloque `@theme` de `globals.css` (y en `storybook.css`) con la forma
+> `--color-{nombre}: hsl(var(--{nombre}))`. En Tailwind v4 las utilidades (`bg-sidebar`,
+> `text-sidebar-foreground`…) **no existen** hasta declararse en `@theme`.
+
+> **Regla crítica para Tailwind v4 — sintaxis de variables arbitrarias:** la sintaxis v3
+> `w-[--mi-var]` ya **no es válida** en v4 y no genera CSS. La sintaxis correcta es
+> `w-(--mi-var)` (shorthand v4) o `w-[var(--mi-var)]` (explícita). Al portar componentes de
+> shadcn, verificar que la fuente usada sea la versión compatible con v4; si no, las clases de
+> ancho/alto con variables CSS no se generan y el layout se rompe en silencio.
+
 ---
 
 ## 10. Reglas de cumplimiento (para que salga perfecto a la primera)

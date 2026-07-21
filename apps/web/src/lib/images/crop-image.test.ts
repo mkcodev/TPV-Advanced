@@ -104,7 +104,7 @@ describe('cropImageToFile', () => {
 
     const canvas = makeCanvas(null);
     (canvas.toBlob as ReturnType<typeof vi.fn>)
-      .mockImplementationOnce((cb: BlobCb) => cb(null))       // webp → null
+      .mockImplementationOnce((cb: BlobCb) => cb(null)) // webp → null
       .mockImplementationOnce((cb: BlobCb) => cb(FAKE_BLOB_JPEG)); // fallback jpeg
 
     const result = await cropImageToFile(SRC, CROP, {}, makeDeps({ createCanvas: () => canvas }));

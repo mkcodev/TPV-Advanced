@@ -63,15 +63,15 @@
    * Colores derivados de tokens existentes — mantienen la paleta slate.
    * Tamaños son nuevos (no tienen equivalente en la escala de tokens).
    */
-  --sidebar-background: var(--muted);              /* fondo apagado, se distingue del content */
-  --sidebar-foreground: var(--foreground);         /* mismo texto principal */
-  --sidebar-border: var(--border);                 /* bordes coherentes con el resto */
-  --sidebar-accent: var(--secondary);              /* highlight de ítem activo / hover */
+  --sidebar-background: var(--muted); /* fondo apagado, se distingue del content */
+  --sidebar-foreground: var(--foreground); /* mismo texto principal */
+  --sidebar-border: var(--border); /* bordes coherentes con el resto */
+  --sidebar-accent: var(--secondary); /* highlight de ítem activo / hover */
   --sidebar-accent-foreground: var(--secondary-foreground); /* texto sobre --sidebar-accent */
-  --sidebar-ring: var(--ring);                     /* mismo focus-ring que el resto de la app */
-  --sidebar-width: 16rem;                          /* ancho expandido */
-  --sidebar-width-icon: 3rem;                      /* ancho colapsado (icon-only) — 48px táctil */
-  --sidebar-width-mobile: 18rem;                   /* Sheet mobile, algo más ancho para pulgar */
+  --sidebar-ring: var(--ring); /* mismo focus-ring que el resto de la app */
+  --sidebar-width: 16rem; /* ancho expandido */
+  --sidebar-width-icon: 3rem; /* ancho colapsado (icon-only) — 48px táctil */
+  --sidebar-width-mobile: 18rem; /* Sheet mobile, algo más ancho para pulgar */
 
   /* ── Motion ──────────────────────────────────────────────────────────────
    * Usar siempre estas variables para duraciones y easing.

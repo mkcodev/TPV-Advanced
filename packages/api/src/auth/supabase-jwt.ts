@@ -29,7 +29,11 @@ export function createSupabaseJwtVerifier(
       const { payload } = await jwtVerify(jwt, jwks);
       if (typeof payload.sub !== 'string') return null;
       return { userId: payload.sub };
-    } catch {
+    } catch (err) {
+      // Log en dev para diagnosticar fallos de JWKS/RS256.
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[jwt] RS256 verification failed:', err);
+      }
       // Fall through to HS256 fallback
     }
 

@@ -18,7 +18,7 @@ export default async function AdminShellLayout({ children }: { children: React.R
   const businessId = await getActiveBusinessServer();
   if (!businessId) redirect('/admin/select-business');
 
-  const allMemberships = await listAdminMemberships(user.id);
+  const allMemberships = await listAdminMemberships(supabase, user.id);
   const currentOrg = allMemberships.find((m) => m.businesses.some((b) => b.id === businessId));
   if (!currentOrg) redirect('/admin/select-business');
 
@@ -35,7 +35,7 @@ export default async function AdminShellLayout({ children }: { children: React.R
       />
       <SidebarInset>
         <ContentHeader />
-        <main className="flex flex-1 flex-col gap-4 p-6">{children}</main>
+        <div className="flex flex-1 flex-col gap-4 p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

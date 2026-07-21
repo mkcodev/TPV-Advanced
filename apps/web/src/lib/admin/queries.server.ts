@@ -1,8 +1,6 @@
 import 'server-only';
 
-import { getDb } from '@/lib/db.server';
-import { businesses, memberships, organizations } from '@tpv/db';
-import { eq } from 'drizzle-orm';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type AdminBusiness = {
   id: string;
@@ -18,40 +16,43 @@ export type AdminMembership = {
   businesses: AdminBusiness[];
 };
 
-export async function listAdminMemberships(userId: string): Promise<AdminMembership[]> {
-  const db = getDb();
-  const rows = await db
-    .select({
-      organizationId: organizations.id,
-      organizationName: organizations.name,
-      role: memberships.role,
-      businessId: businesses.id,
-      businessName: businesses.name,
-      timezone: businesses.timezone,
-      currency: businesses.currency,
-    })
-    .from(memberships)
-    .innerJoin(organizations, eq(memberships.organizationId, organizations.id))
-    .innerJoin(businesses, eq(businesses.organizationId, organizations.id))
-    .where(eq(memberships.userId, userId));
+// Uses the user's Supabase client (with JWT) so auth.uid() resolves correctly
+// in RLS policies. Direct drizzle connections bypass Supabase auth context.
+export async function listAdminMemberships(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<AdminMembership[]> {
+  const { data, error } = await supabase
+    .from('memberships')
+    .select(
+      'role, organization_id, organizations(id, name, businesses(id, name, timezone, currency))',
+    )
+    .eq('user_id', userId);
 
-  const orgMap = new Map<string, AdminMembership>();
-  for (const row of rows) {
-    if (!orgMap.has(row.organizationId)) {
-      orgMap.set(row.organizationId, {
-        organizationId: row.organizationId,
-        organizationName: row.organizationName,
-        role: row.role as AdminMembership['role'],
-        businesses: [],
-      });
-    }
-    orgMap.get(row.organizationId)?.businesses.push({
-      id: row.businessId,
-      name: row.businessName,
-      timezone: row.timezone,
-      currency: row.currency,
-    });
+  if (error) {
+    console.error('[listAdminMemberships] query failed:', error);
+    return [];
   }
 
-  return [...orgMap.values()];
+  const result: AdminMembership[] = [];
+  for (const row of data ?? []) {
+    const org = row.organizations as unknown as {
+      id: string;
+      name: string;
+      businesses?: AdminBusiness[];
+    } | null;
+    if (!org) continue;
+    result.push({
+      organizationId: org.id,
+      organizationName: org.name,
+      role: row.role as AdminMembership['role'],
+      businesses: (org.businesses ?? []).map((b) => ({
+        id: b.id,
+        name: b.name,
+        timezone: b.timezone,
+        currency: b.currency,
+      })),
+    });
+  }
+  return result;
 }

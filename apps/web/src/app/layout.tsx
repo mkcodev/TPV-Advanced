@@ -33,7 +33,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <TRPCProvider>
             {children}

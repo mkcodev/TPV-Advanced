@@ -12,7 +12,7 @@ export default async function AdminDashboardPage() {
   } = await supabase.auth.getUser();
 
   const businessId = await getActiveBusinessServer();
-  const allMemberships = businessId ? await listAdminMemberships(user?.id ?? '') : [];
+  const allMemberships = businessId ? await listAdminMemberships(supabase, user?.id ?? '') : [];
   const currentOrg = allMemberships.find((m) => m.businesses.some((b) => b.id === businessId));
   const currentBusiness = currentOrg?.businesses.find((b) => b.id === businessId);
   const role: NavRole = (currentOrg?.role as NavRole) ?? 'staff';

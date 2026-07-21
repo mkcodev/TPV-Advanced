@@ -1,5 +1,6 @@
 'use client';
 
+import { ProductThumbnail } from '@/components/catalog/product-thumbnail';
 import { trpc } from '@/lib/trpc/client';
 import { formatCents } from '@tpv/core';
 import {
@@ -22,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from '@tpv/ui';
-import { ProductThumbnail } from '@/components/catalog/product-thumbnail';
 import { ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';

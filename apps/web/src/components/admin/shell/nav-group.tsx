@@ -10,7 +10,6 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@tpv/ui';
@@ -66,14 +65,17 @@ export function NavGroup({ group, userRole }: NavGroupProps) {
                   tooltip={t(item.labelKey)}
                 >
                   {isSoon ? (
-                    <span className="flex items-center gap-2 opacity-60">
+                    <>
                       <item.icon
-                        className="h-4 w-4 shrink-0"
+                        className="h-4 w-4 shrink-0 opacity-60"
                         strokeWidth={1.5}
                         aria-hidden="true"
                       />
-                      <span>{t(item.labelKey)}</span>
-                    </span>
+                      <span className="flex-1 truncate opacity-60">{t(item.labelKey)}</span>
+                      <span className="ml-auto shrink-0 rounded-sm bg-muted-foreground/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground group-data-[collapsible=icon]:hidden">
+                        {t('soonBadge')}
+                      </span>
+                    </>
                   ) : (
                     <Link href={item.href}>
                       <item.icon
@@ -85,11 +87,6 @@ export function NavGroup({ group, userRole }: NavGroupProps) {
                     </Link>
                   )}
                 </SidebarMenuButton>
-                {isSoon && (
-                  <SidebarMenuBadge className="text-muted-foreground/60 text-[10px]">
-                    {t('soonBadge')}
-                  </SidebarMenuBadge>
-                )}
               </SidebarMenuItem>
             );
           })}
