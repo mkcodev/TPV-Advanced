@@ -20,7 +20,13 @@ export function ProductThumbnail({ src, name, size = 'sm', className }: ProductT
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={name} className="h-full w-full object-cover" />
+        <img
+          src={src}
+          alt={name}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <span className="text-xs font-medium text-muted-foreground select-none">{initials}</span>
       )}

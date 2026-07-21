@@ -85,6 +85,49 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* ── Animaciones TPV ─────────────────────────────────────────────────────────
+ * Keyframes para feedback visual del TPV. Solo transform/opacity.
+ * tpv-tick: pulso del total al cambiar (S10) — decorativo, se desactiva con
+ *   prefers-reduced-motion pero el scale del tap sigue activo (es funcional).
+ * tpv-badge-in: entrada del badge de cantidad flotante en la tarjeta de producto.
+ */
+@keyframes tpv-tick {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tpv-badge-in {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.tpv-tick {
+  animation: tpv-tick var(--duration-fast) var(--ease-standard);
+}
+
+.tpv-badge {
+  animation: tpv-badge-in var(--duration-fast) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpv-tick {
+    animation: none;
+  }
+}
+
 /* ── Tema oscuro (KDS) ───────────────────────────────────────────────────────
  * Obligatorio para la pantalla KDS (cocina, poca luz).
  * Opcional para el TPV en turno de noche.

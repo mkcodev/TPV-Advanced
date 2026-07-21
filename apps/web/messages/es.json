@@ -229,17 +229,34 @@
     },
     "content": {
       "selectCategory": "Selecciona una categoría",
-      "noProducts": "No hay productos en esta categoría"
+      "noProducts": "No hay productos en esta categoría",
+      "errorLoading": "Error al cargar los productos",
+      "searchPlaceholder": "Buscar productos…",
+      "clearSearch": "Borrar búsqueda",
+      "noResults": "Sin resultados para \"{query}\"",
+      "variantsTodo": "Este producto tiene variantes (selector próximamente)"
     },
     "order": {
       "title": "Comanda",
       "empty": "Sin artículos",
       "emptyHint": "Toca un producto para añadirlo",
       "clear": "Limpiar",
+      "clearConfirmTitle": "¿Vaciar la comanda?",
+      "clearConfirmDescription": "Se eliminarán todos los artículos. Esta acción no se puede deshacer.",
+      "clearConfirmCancel": "Cancelar",
+      "clearConfirmAction": "Vaciar",
       "subtotal": "Subtotal",
-      "tax": "IVA",
+      "tax": "IVA {rate}%",
       "total": "Total",
-      "charge": "Cobrar"
+      "charge": "Cobrar",
+      "lineDeleted": "Artículo eliminado",
+      "undo": "Deshacer",
+      "increaseQty": "Aumentar cantidad",
+      "decreaseQty": "Disminuir cantidad",
+      "removeItem": "Eliminar artículo",
+      "duplicateItem": "Duplicar artículo",
+      "swipeLeft": "Anular",
+      "swipeRight": "Duplicar"
     }
   }
 }
