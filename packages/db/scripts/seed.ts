@@ -1,9 +1,12 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Script de seed para desarrollo. Crea un usuario admin demo con org, negocio,
-// memberships y productos de ejemplo. Idempotente: limpia y recrea los datos demo.
+// memberships, productos de ejemplo, empleados y un device pre-emparejado.
+// Idempotente: limpia y recrea los datos demo.
 // Uso: pnpm db:seed (desde la raíz) o pnpm --filter @tpv/db db:seed
 import { config } from 'dotenv';
+import { hash } from '@node-rs/argon2';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../../.env') });
@@ -171,12 +174,65 @@ async function main() {
     },
   ]);
 
+  // --- Employees ---
+  const ARGON2_OPTIONS = { memoryCost: 65536, timeCost: 3, outputLen: 32, parallelism: 1 } as const;
+
+  const employeeData = [
+    { name: 'Ana García', role: 'admin' as const, pin: '1234' },
+    { name: 'Bruno López', role: 'worker' as const, pin: '5678' },
+    { name: 'Carla Martín', role: 'manager' as const, pin: '4321' },
+  ];
+
+  const createdEmployees = await Promise.all(
+    employeeData.map(async (e) => {
+      const pinHash = await hash(e.pin, ARGON2_OPTIONS);
+      const avatarUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(e.name)}`;
+      const [row] = await db
+        .insert(employees)
+        .values({
+          businessId: business.id,
+          name: e.name,
+          role: e.role,
+          pinHash,
+          avatarUrl,
+          isActive: true,
+        })
+        .returning({ id: employees.id });
+      if (!row) throw new Error(`Failed to insert employee ${e.name}`);
+      return { ...e, id: row.id, avatarUrl };
+    }),
+  );
+
+  // --- Pre-paired development device ---
+  // The plaintext token is printed below — the server stores only its SHA-256 hash.
+  const deviceToken = randomBytes(32).toString('base64url');
+  const deviceTokenHash = createHash('sha256').update(deviceToken).digest('base64url');
+
+  await db.insert(devices).values({
+    businessId: business.id,
+    name: 'Terminal Demo',
+    type: 'pos_terminal',
+    deviceTokenHash,
+    isActive: true,
+    lastSeenAt: new Date(),
+  });
+
   await db.$client.end();
 
   console.log('\n✔ Seed completado');
   console.log('  URL:        http://localhost:3000/admin/login');
   console.log(`  Email:      ${DEMO_EMAIL}`);
   console.log(`  Contraseña: ${DEMO_PASSWORD}`);
+  console.log('');
+  console.log('────────────────────────────────────────────────');
+  console.log('  TPV — Token de dispositivo (solo dev):');
+  console.log(`  ${deviceToken}`);
+  console.log('');
+  console.log('  Empleados y PINs:');
+  for (const e of createdEmployees) {
+    console.log(`    ${e.name.padEnd(16)} PIN: ${e.pin}  role: ${e.role}  id: ${e.id}`);
+  }
+  console.log('────────────────────────────────────────────────');
   console.log('');
 }
 

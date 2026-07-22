@@ -257,6 +257,60 @@
       "duplicateItem": "Duplicar artículo",
       "swipeLeft": "Anular",
       "swipeRight": "Duplicar"
+    },
+    "auth": {
+      "splash": {
+        "loading": "Cargando terminal…"
+      },
+      "pairing": {
+        "title": "Emparejar terminal",
+        "subtitle": "Introduce el código de 6-8 dígitos generado desde el panel de administración.",
+        "codeLabel": "Código de emparejamiento",
+        "codePlaceholder": "000000",
+        "submit": "Emparejar",
+        "submitting": "Emparejando…",
+        "devTokenTitle": "Modo desarrollo — pegar token directamente",
+        "devTokenLabel": "Device token",
+        "devTokenSubmit": "Usar token",
+        "success": "Terminal emparejado correctamente",
+        "errors": {
+          "invalidCode": "Código no válido o caducado",
+          "rateLimit": "Demasiados intentos. Espera un minuto.",
+          "generic": "Error al emparejar. Inténtalo de nuevo."
+        }
+      },
+      "login": {
+        "title": "¿Quién atiende ahora?",
+        "enterPinFor": "PIN de {name}",
+        "changeEmployee": "Cambiar empleado",
+        "noEmployees": "No hay empleados configurados. Crea empleados en el panel de administración.",
+        "errors": {
+          "invalidCredentials": "PIN incorrecto",
+          "accountLocked": "Cuenta bloqueada hasta las {time}",
+          "rateLimit": "Demasiados intentos. Espera un minuto.",
+          "deviceRevoked": "Este terminal ha sido revocado. Contacta con el administrador.",
+          "sessionExpired": "Sesión expirada. Inicia sesión de nuevo.",
+          "generic": "Error inesperado. Inténtalo de nuevo."
+        }
+      },
+      "keypad": {
+        "backspace": "Borrar",
+        "clear": "Limpiar",
+        "submit": "Entrar"
+      },
+      "idle": {
+        "lockedTitle": "Terminal bloqueado",
+        "lockedSubtitle": "Selecciona un empleado para continuar"
+      },
+      "chip": {
+        "role": {
+          "admin": "Administrador",
+          "manager": "Encargado",
+          "worker": "Empleado"
+        },
+        "change": "Cambiar empleado",
+        "logout": "Cerrar sesión"
+      }
     }
   }
 }

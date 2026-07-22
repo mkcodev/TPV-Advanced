@@ -1,4 +1,5 @@
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { AdminTRPCProvider } from '@/lib/trpc/provider';
 import { redirect } from 'next/navigation';
 
 export default async function AdminProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -11,5 +12,5 @@ export default async function AdminProtectedLayout({ children }: { children: Rea
     redirect('/admin/login');
   }
 
-  return <>{children}</>;
+  return <AdminTRPCProvider>{children}</AdminTRPCProvider>;
 }

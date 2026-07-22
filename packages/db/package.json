@@ -19,6 +19,7 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@supabase/supabase-js": "^2.48.0",
     "@types/node": "^20",
     "dotenv": "^16.5.0",
