@@ -175,6 +175,16 @@ describe('clear', () => {
     clear();
     expect(useOrderStore.getState().lines).toHaveLength(0);
   });
+
+  it('resetea orderId, savedOrderNumber, savedTotals y savedVersion a null', () => {
+    useOrderStore.getState().ensureOrderId();
+    useOrderStore.getState().clear();
+    const s = useOrderStore.getState();
+    expect(s.orderId).toBeNull();
+    expect(s.savedOrderNumber).toBeNull();
+    expect(s.savedTotals).toBeNull();
+    expect(s.savedVersion).toBeNull();
+  });
 });
 
 describe('countForProduct', () => {
@@ -187,6 +197,74 @@ describe('countForProduct', () => {
 
   it('devuelve 0 si el producto no está en la comanda', () => {
     expect(useOrderStore.getState().countForProduct('prod-z')).toBe(0);
+  });
+});
+
+describe('ensureOrderId', () => {
+  it('genera un uuid la primera vez', () => {
+    const id = useOrderStore.getState().ensureOrderId();
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(useOrderStore.getState().orderId).toBe(id);
+  });
+
+  it('devuelve el mismo id en llamadas sucesivas', () => {
+    const first = useOrderStore.getState().ensureOrderId();
+    const second = useOrderStore.getState().ensureOrderId();
+    expect(first).toBe(second);
+  });
+});
+
+const SERVER_ORDER = {
+  id: 'aaaaaaaa-0000-0000-0000-000000000001',
+  orderNumber: 7,
+  status: 'open',
+  subtotalCents: 1000,
+  taxTotalCents: 100,
+  totalCents: 1100,
+  version: 2,
+  lines: [
+    {
+      id: 'bbbbbbbb-0000-0000-0000-000000000001',
+      productId: 'prod-a',
+      nameSnapshot: 'Café con leche',
+      unitPriceCents: 150,
+      taxRate: 10,
+      quantity: 2,
+      lineTotalCents: 300,
+      notes: null,
+    },
+  ],
+};
+
+describe('hydrateFromServer', () => {
+  it('reemplaza el estado completo con los datos del servidor', () => {
+    useOrderStore.getState().hydrateFromServer(SERVER_ORDER);
+    const s = useOrderStore.getState();
+    expect(s.orderId).toBe(SERVER_ORDER.id);
+    expect(s.savedOrderNumber).toBe(7);
+    expect(s.savedTotals).toEqual({ subtotalCents: 1000, taxTotalCents: 100, totalCents: 1100 });
+    expect(s.savedVersion).toBe(2);
+    expect(s.lines).toHaveLength(1);
+    expect(s.lines[0]?.name).toBe('Café con leche');
+    expect(s.lines[0]?.quantity).toBe(2);
+  });
+});
+
+describe('shouldHydrateFromServer', () => {
+  it('devuelve false si no hay orderId', () => {
+    expect(useOrderStore.getState().shouldHydrateFromServer()).toBe(false);
+  });
+
+  it('devuelve true si hay orderId y no hay líneas', () => {
+    useOrderStore.setState({ orderId: 'aaaaaaaa-0000-0000-0000-000000000001', lines: [] });
+    expect(useOrderStore.getState().shouldHydrateFromServer()).toBe(true);
+  });
+
+  it('devuelve false si hay orderId pero también hay líneas locales (local wins)', () => {
+    useOrderStore.getState().addProduct(PRODUCT_A); // crea una línea
+    useOrderStore.setState({ orderId: 'aaaaaaaa-0000-0000-0000-000000000001' });
+    // Las líneas locales no guardadas son fuente de verdad — no se debe reemplazar.
+    expect(useOrderStore.getState().shouldHydrateFromServer()).toBe(false);
   });
 });
 

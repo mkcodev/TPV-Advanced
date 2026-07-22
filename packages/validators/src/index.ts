@@ -176,3 +176,31 @@ export const updateVariantSchema = z
   })
   .strict();
 export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
+
+// Order schemas
+
+// Mirrored from packages/db/src/schema/orders.ts to keep validators dep-free.
+const ORDER_TYPES = ['dine_in', 'takeaway', 'delivery', 'counter'] as const;
+
+export const upsertOrderLineSchema = z
+  .object({
+    lineId: z.string().uuid(),
+    productId: z.string().uuid(),
+    variantId: z.string().uuid().optional(),
+    quantity: z.number().int().min(1),
+    notes: z.string().optional(),
+  })
+  .strict();
+
+export const upsertOrderSchema = z
+  .object({
+    orderId: z.string().uuid(),
+    type: z.enum(ORDER_TYPES),
+    notes: z.string().optional(),
+    lines: z.array(upsertOrderLineSchema),
+  })
+  .strict();
+export type UpsertOrderInput = z.infer<typeof upsertOrderSchema>;
+
+export const orderIdSchema = z.object({ orderId: z.string().uuid() }).strict();
+export type OrderIdInput = z.infer<typeof orderIdSchema>;
