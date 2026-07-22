@@ -24,8 +24,8 @@ export function TpvProductCard({ product }: TpvProductCardProps) {
   const t = useTranslations('tpv.content');
   const addProduct = useOrderStore((s) => s.addProduct);
   const incrementLine = useOrderStore((s) => s.incrementLine);
-  const countForProduct = useOrderStore((s) => s.countForProduct);
-  const count = countForProduct(product.id);
+  // Selector primitivo (número): re-render solo cuando la cantidad de este producto cambia
+  const count = useOrderStore((s) => s.countForProduct(product.id));
   const [pressed, setPressed] = useState(false);
 
   const handleAdd = useCallback(() => {

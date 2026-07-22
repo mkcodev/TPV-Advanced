@@ -3,11 +3,13 @@
 import { useOrderStore } from '@/lib/stores/use-order-store';
 import { ScrollArea } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
+import { useShallow } from 'zustand/react/shallow';
 import { TpvOrderLine } from './tpv-order-line';
 
 export function TpvOrderLines() {
   const t = useTranslations('tpv.order');
-  const lineIds = useOrderStore((s) => s.lines.map((l) => l.id));
+  // useShallow: compara elemento a elemento → no crea nueva referencia si los ids no cambiaron
+  const lineIds = useOrderStore(useShallow((s) => s.lines.map((l) => l.id)));
 
   if (lineIds.length === 0) {
     return (
