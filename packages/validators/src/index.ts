@@ -204,3 +204,43 @@ export type UpsertOrderInput = z.infer<typeof upsertOrderSchema>;
 
 export const orderIdSchema = z.object({ orderId: z.string().uuid() }).strict();
 export type OrderIdInput = z.infer<typeof orderIdSchema>;
+
+// Payment schemas
+
+// Mirrored from packages/db/src/schema/orders.ts to keep validators dep-free.
+export const PAYMENT_METHODS = ['cash', 'card', 'bizum', 'other'] as const;
+
+export const payOrderPaymentSchema = z
+  .object({
+    method: z.enum(PAYMENT_METHODS),
+    amountCents: z.number().int().positive(),
+    tipCents: z.number().int().nonnegative().default(0),
+    cashReceivedCents: z.number().int().positive().optional(),
+    reference: z.string().max(120).optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.method === 'cash') {
+      if (data.cashReceivedCents === undefined) {
+        ctx.addIssue({ code: 'custom', message: 'cashReceivedCents required for cash payments' });
+      } else if (data.cashReceivedCents < data.amountCents) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'cashReceivedCents must be >= amountCents',
+        });
+      }
+    } else if (data.cashReceivedCents !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'cashReceivedCents is only valid for cash payments',
+      });
+    }
+  });
+
+export const payOrderSchema = z
+  .object({
+    orderId: z.string().uuid(),
+    payments: z.array(payOrderPaymentSchema).min(1).max(6),
+  })
+  .strict();
+export type PayOrderInput = z.infer<typeof payOrderSchema>;

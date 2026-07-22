@@ -5,17 +5,23 @@
 // - Los totales se calculan en servidor con @tpv/core.orderTaxBreakdown.
 // - Idempotencia: orderId cliente-generado actúa como PK (upsert).
 
-import { lineTotalCents, orderTaxBreakdown } from '@tpv/core';
+import {
+  calculateChangeCents,
+  lineTotalCents,
+  orderTaxBreakdown,
+  summarizePayments,
+} from '@tpv/core';
 import {
   type BusinessTransaction,
   orderEvents,
   orderItems,
   orders,
+  payments,
   productVariants,
   products,
   withBusinessContext,
 } from '@tpv/db';
-import { orderIdSchema, upsertOrderSchema } from '@tpv/validators';
+import { orderIdSchema, payOrderSchema, upsertOrderSchema } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { deviceProcedure } from '../procedures';
@@ -331,6 +337,137 @@ export const ordersRouter = router({
         .where(eq(orderItems.orderId, input.orderId));
 
       return { ...finalOrder, lines: finalItems.map(mapItem) };
+    });
+  }),
+
+  pay: deviceProcedure.input(payOrderSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+    const employeeId = ctx.employeeId;
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      // Lock the order row to prevent concurrent payments.
+      const [order] = await tx
+        .select({
+          id: orders.id,
+          status: orders.status,
+          totalCents: orders.totalCents,
+          orderNumber: orders.orderNumber,
+          version: orders.version,
+        })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
+        .for('update');
+
+      if (!order) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Order not found' });
+      }
+      if (order.status === 'paid') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order already paid' });
+      }
+      if (order.status === 'cancelled') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order is cancelled' });
+      }
+
+      // Recalculate total from items (defensive — server is authoritative).
+      const items = await tx
+        .select({ lineTotalCents: orderItems.lineTotalCents, taxRate: orderItems.taxRate })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id));
+
+      const breakdown = orderTaxBreakdown(
+        items.map((i) => ({ grossCents: i.lineTotalCents, taxRate: Number(i.taxRate) })),
+      );
+      const totalCents = breakdown.totalCents;
+
+      if (totalCents !== order.totalCents) {
+        console.error(
+          `[orders.pay] total drift: persisted=${order.totalCents} recalculated=${totalCents} orderId=${order.id}`,
+        );
+      }
+
+      // Validate payment sum against authoritative total.
+      const summary = summarizePayments(input.payments);
+      if (summary.totalPaidCents > totalCents) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'Payment exceeds order total. Use cashReceivedCents for cash change, not amountCents.',
+        });
+      }
+
+      const isFullyPaid = summary.totalPaidCents === totalCents;
+      const remainingCents = totalCents - summary.totalPaidCents;
+
+      // Insert one payment row per method.
+      const inserted = await tx
+        .insert(payments)
+        .values(
+          input.payments.map((p) => ({
+            businessId: ctx.businessId,
+            orderId: order.id,
+            cashSessionId: null, // linked in task 1.11
+            method: p.method,
+            amountCents: p.amountCents,
+            tipCents: p.tipCents ?? 0,
+            cashReceivedCents: p.method === 'cash' ? (p.cashReceivedCents ?? null) : null,
+            changeCents:
+              p.method === 'cash' && p.cashReceivedCents !== undefined
+                ? calculateChangeCents(p.amountCents, p.cashReceivedCents)
+                : null,
+            reference: p.reference ?? null,
+            employeeId,
+          })),
+        )
+        .returning({ id: payments.id });
+
+      // Close the order when fully paid.
+      if (isFullyPaid) {
+        const updated = await tx
+          .update(orders)
+          .set({
+            status: 'paid',
+            closedAt: sql`now()`,
+            version: sql`${orders.version} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(orders.id, order.id), eq(orders.version, order.version)));
+
+        // If rowsAffected is 0, a concurrent write changed version — conflict.
+        if ((updated as unknown as { rowCount?: number }).rowCount === 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Order was modified concurrently. Please retry.',
+          });
+        }
+      }
+
+      await tx.insert(orderEvents).values({
+        orderId: order.id,
+        businessId: ctx.businessId,
+        eventType: isFullyPaid ? 'paid' : 'payment_recorded',
+        employeeId,
+        payload: {
+          paymentIds: inserted.map((r) => r.id),
+          totalCents,
+          paidCents: summary.totalPaidCents,
+          tipCents: summary.totalTipCents,
+          remainingCents,
+          methods: input.payments.map((p) => p.method),
+        },
+      });
+
+      return {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: isFullyPaid ? ('paid' as const) : ('open' as const),
+        totalCents,
+        paidCents: summary.totalPaidCents,
+        remainingCents,
+        tipCents: summary.totalTipCents,
+        changeCents: summary.totalChangeCents,
+      };
     });
   }),
 

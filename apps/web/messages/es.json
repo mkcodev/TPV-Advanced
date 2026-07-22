@@ -260,7 +260,30 @@
       "removeItem": "Eliminar artículo",
       "duplicateItem": "Duplicar artículo",
       "swipeLeft": "Anular",
-      "swipeRight": "Duplicar"
+      "swipeRight": "Duplicar",
+      "payment": {
+        "title": "Cobrar #{number}",
+        "totalDue": "Total a cobrar",
+        "remaining": "Restante",
+        "change": "Cambio",
+        "cashReceived": "Efectivo recibido",
+        "exactAmount": "Importe exacto",
+        "otherAmount": "Otro importe",
+        "method": {
+          "cash": "Efectivo",
+          "card": "Tarjeta",
+          "bizum": "Bizum"
+        },
+        "addMethod": "Añadir método",
+        "confirm": "Confirmar cobro",
+        "cancel": "Cancelar",
+        "successPaid": "Cobrado #{number}",
+        "successPartial": "Pago parcial · Restante {remaining}",
+        "error": "No se pudo procesar el cobro",
+        "notSavedHint": "Guarda la comanda antes de cobrar",
+        "reference": "Referencia (opcional)",
+        "removePayment": "Eliminar pago"
+      }
     },
     "auth": {
       "splash": {
