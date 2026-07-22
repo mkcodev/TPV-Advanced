@@ -48,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
         labelKey: 'floor',
         href: '/admin/floor',
         icon: LayoutGrid,
-        status: 'soon',
+        status: 'ready',
         minRole: 'admin',
       },
       {

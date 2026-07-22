@@ -177,6 +177,75 @@ export const updateVariantSchema = z
   .strict();
 export type UpdateVariantInput = z.infer<typeof updateVariantSchema>;
 
+// Floor schemas
+
+// Mirrored from packages/db/src/schema/floor.ts to keep validators dep-free.
+const TABLE_SHAPES = ['square', 'round'] as const;
+
+export const listByZoneSchema = z
+  .object({
+    zoneId: z.string().uuid(),
+    includeInactive: z.boolean().optional(),
+  })
+  .strict();
+export type ListByZoneInput = z.infer<typeof listByZoneSchema>;
+
+export const listTablesWithOrdersSchema = z
+  .object({ zoneId: z.string().uuid().optional() })
+  .strict();
+export type ListTablesWithOrdersInput = z.infer<typeof listTablesWithOrdersSchema>;
+
+export const createZoneSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required'),
+    displayOrder: z.number().int().min(0).optional(),
+    backgroundUrl: z.string().url().nullable().optional(),
+  })
+  .strict();
+export type CreateZoneInput = z.infer<typeof createZoneSchema>;
+
+export const updateZoneSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1).optional(),
+    displayOrder: z.number().int().min(0).optional(),
+    backgroundUrl: z.string().url().nullable().optional(),
+  })
+  .strict();
+export type UpdateZoneInput = z.infer<typeof updateZoneSchema>;
+
+export const createTableSchema = z
+  .object({
+    zoneId: z.string().uuid(),
+    name: z.string().min(1, 'Name is required'),
+    posX: z.number().int().min(0),
+    posY: z.number().int().min(0),
+    width: z.number().int().min(40),
+    height: z.number().int().min(40),
+    shape: z.enum(TABLE_SHAPES),
+    seats: z.number().int().min(1),
+  })
+  .strict();
+export type CreateTableInput = z.infer<typeof createTableSchema>;
+
+export const updateTableSchema = z
+  .object({
+    id: z.string().uuid(),
+    zoneId: z.string().uuid().optional(),
+    name: z.string().min(1).optional(),
+    posX: z.number().int().min(0).optional(),
+    posY: z.number().int().min(0).optional(),
+    width: z.number().int().min(40).optional(),
+    height: z.number().int().min(40).optional(),
+    shape: z.enum(TABLE_SHAPES).optional(),
+    seats: z.number().int().min(1).optional(),
+  })
+  .strict();
+export type UpdateTableInput = z.infer<typeof updateTableSchema>;
+
+export const tableIdSchema = z.object({ tableId: z.string().uuid() }).strict();
+export type TableIdInput = z.infer<typeof tableIdSchema>;
+
 // Order schemas
 
 // Mirrored from packages/db/src/schema/orders.ts to keep validators dep-free.
@@ -196,6 +265,7 @@ export const upsertOrderSchema = z
   .object({
     orderId: z.string().uuid(),
     type: z.enum(ORDER_TYPES),
+    tableId: z.string().uuid().nullable().optional(),
     notes: z.string().optional(),
     lines: z.array(upsertOrderLineSchema),
   })

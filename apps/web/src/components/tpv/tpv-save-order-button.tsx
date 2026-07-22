@@ -9,14 +9,17 @@ import { useShallow } from 'zustand/react/shallow';
 
 export function TpvSaveOrderButton() {
   const t = useTranslations('tpv.order');
-  const { lines, ensureOrderId, hydrateFromServer, savedOrderNumber } = useOrderStore(
-    useShallow((s) => ({
-      lines: s.lines,
-      ensureOrderId: s.ensureOrderId,
-      hydrateFromServer: s.hydrateFromServer,
-      savedOrderNumber: s.savedOrderNumber,
-    })),
-  );
+  const { lines, type, tableId, ensureOrderId, hydrateFromServer, savedOrderNumber } =
+    useOrderStore(
+      useShallow((s) => ({
+        lines: s.lines,
+        type: s.type,
+        tableId: s.tableId,
+        ensureOrderId: s.ensureOrderId,
+        hydrateFromServer: s.hydrateFromServer,
+        savedOrderNumber: s.savedOrderNumber,
+      })),
+    );
 
   const { mutate, isPending } = trpc.orders.upsert.useMutation({
     onSuccess: (data) => {
@@ -33,7 +36,8 @@ export function TpvSaveOrderButton() {
     const orderId = ensureOrderId();
     mutate({
       orderId,
-      type: 'counter',
+      type,
+      ...(tableId !== null ? { tableId } : {}),
       lines: lines.map((l) => ({
         lineId: l.id,
         productId: l.productId,

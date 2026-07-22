@@ -77,6 +77,93 @@
         }
       }
     },
+    "floor": {
+      "title": "Sala y mesas",
+      "tabs": {
+        "zones": "Zonas",
+        "canvas": "Plano"
+      },
+      "zones": {
+        "title": "Zonas",
+        "new": "Nueva zona",
+        "edit": "Editar zona",
+        "empty": "No hay zonas todavía",
+        "emptyCta": "Crea la primera zona",
+        "columns": {
+          "name": "Nombre",
+          "tables": "Mesas",
+          "order": "Orden",
+          "active": "Activo",
+          "actions": "Acciones"
+        },
+        "fields": {
+          "name": "Nombre",
+          "namePlaceholder": "Ej: Salón, Terraza, Barra"
+        },
+        "deactivate": {
+          "title": "Desactivar zona",
+          "description": "Las mesas de esta zona quedarán ocultas en el TPV. ¿Continuar?",
+          "confirm": "Desactivar"
+        },
+        "toast": {
+          "created": "Zona creada",
+          "updated": "Zona actualizada",
+          "activated": "Zona activada",
+          "deactivated": "Zona desactivada",
+          "error": "Error al guardar la zona"
+        }
+      },
+      "tables": {
+        "title": "Mesas",
+        "new": "Nueva mesa",
+        "edit": "Editar mesa",
+        "empty": "No hay mesas en esta zona",
+        "emptyCta": "Añade la primera mesa",
+        "addToFloor": "Añadir al plano",
+        "columns": {
+          "name": "Nombre / Nº",
+          "seats": "Comensales",
+          "shape": "Forma",
+          "active": "Activo",
+          "actions": "Acciones"
+        },
+        "fields": {
+          "name": "Nombre / Nº",
+          "namePlaceholder": "Ej: Mesa 1, Barra 3",
+          "seats": "Comensales",
+          "shape": "Forma",
+          "zone": "Zona"
+        },
+        "shape": {
+          "square": "Cuadrada",
+          "round": "Redonda"
+        },
+        "deactivate": {
+          "title": "Desactivar mesa",
+          "description": "La mesa quedará oculta en el TPV. ¿Continuar?",
+          "confirm": "Desactivar"
+        },
+        "delete": {
+          "title": "Eliminar mesa",
+          "description": "Se eliminará la mesa del plano. ¿Continuar?",
+          "confirm": "Eliminar"
+        },
+        "toast": {
+          "created": "Mesa creada",
+          "updated": "Mesa guardada",
+          "activated": "Mesa activada",
+          "deactivated": "Mesa desactivada",
+          "moved": "Posición guardada",
+          "error": "Error al guardar la mesa"
+        }
+      },
+      "canvas": {
+        "hint": "Arrastra las mesas para colocarlas",
+        "dragToMove": "Arrastra para mover",
+        "empty": "Sin mesas en esta zona",
+        "emptyCta": "Añade mesas desde el panel de la izquierda"
+      }
+    },
     "catalog": {
       "title": "Catálogo",
       "tabs": {
@@ -284,6 +371,23 @@
         "reference": "Referencia (opcional)",
         "removePayment": "Eliminar pago"
       }
+    },
+    "floor": {
+      "title": "Plano de sala",
+      "counter": "Venta rápida barra",
+      "counterHint": "Sin mesa asignada",
+      "backToFloor": "Volver al plano",
+      "tableLabel": "Mesa {name}",
+      "zoneLabel": "{zone}",
+      "orderContext": "Mesa {name} · {zone}",
+      "free": "Libre",
+      "occupied": "Ocupada",
+      "billing": "Por cobrar",
+      "reserved": "Reservada",
+      "seats": "{count} comensales",
+      "emptyZone": "Sin mesas en esta zona",
+      "noZones": "No hay zonas configuradas",
+      "noZonesCta": "Configura las zonas en el panel de administración"
     },
     "auth": {
       "splash": {

@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hash } from '@node-rs/argon2';
 // Script de seed para desarrollo. Crea un usuario admin demo con org, negocio,
 // memberships, productos de ejemplo, empleados y un device pre-emparejado.
 // Idempotente: limpia y recrea los datos demo.
 // Uso: pnpm db:seed (desde la raíz) o pnpm --filter @tpv/db db:seed
 import { config } from 'dotenv';
-import { hash } from '@node-rs/argon2';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../../.env') });

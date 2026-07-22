@@ -268,6 +268,97 @@ describe('shouldHydrateFromServer', () => {
   });
 });
 
+describe('multi-sesión: setActiveTable / setActiveCounter', () => {
+  beforeEach(() => {
+    // Full reset — also clears sessions Map and activeKey.
+    useOrderStore.setState({
+      lines: [],
+      orderId: null,
+      savedOrderNumber: null,
+      savedTotals: null,
+      savedVersion: null,
+      tableId: null,
+      tableName: null,
+      zoneId: null,
+      zoneName: null,
+      type: 'counter',
+      sessions: {},
+      activeKey: null,
+    });
+  });
+
+  it('aísla líneas entre mesas distintas', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_A);
+
+    useOrderStore.getState().setActiveTable('T2', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_B);
+
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    const lines = useOrderStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.productId).toBe('prod-a');
+  });
+
+  it('aísla líneas entre mesa y barra', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_A);
+
+    useOrderStore.getState().setActiveCounter();
+    useOrderStore.getState().addProduct(PRODUCT_B);
+
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    const lines = useOrderStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.productId).toBe('prod-a');
+  });
+
+  it('setActiveTable expone tableId y type dine_in', () => {
+    useOrderStore.getState().setActiveTable('T3', 'Z2');
+    const s = useOrderStore.getState();
+    expect(s.tableId).toBe('T3');
+    expect(s.zoneId).toBe('Z2');
+    expect(s.type).toBe('dine_in');
+    expect(s.activeKey).toBe('table:T3');
+  });
+
+  it('setActiveCounter expone tableId null y type counter', () => {
+    useOrderStore.getState().setActiveCounter();
+    const s = useOrderStore.getState();
+    expect(s.tableId).toBeNull();
+    expect(s.type).toBe('counter');
+    expect(s.activeKey).toBe('counter');
+  });
+
+  it('shouldFetchOpenByTable es true solo en sesión de mesa vacía sin orderId', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    // Sin líneas ni orderId → debería buscar en servidor.
+    expect(useOrderStore.getState().shouldFetchOpenByTable()).toBe(true);
+  });
+
+  it('shouldFetchOpenByTable es false si hay líneas locales (local wins)', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_A);
+    expect(useOrderStore.getState().shouldFetchOpenByTable()).toBe(false);
+  });
+
+  it('shouldFetchOpenByTable es false en sesión de barra', () => {
+    useOrderStore.getState().setActiveCounter();
+    expect(useOrderStore.getState().shouldFetchOpenByTable()).toBe(false);
+  });
+
+  it('clear en sesión de mesa borra las líneas pero mantiene el contexto de mesa', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_A);
+    useOrderStore.getState().clear();
+    const s = useOrderStore.getState();
+    expect(s.lines).toHaveLength(0);
+    expect(s.orderId).toBeNull();
+    expect(s.tableId).toBe('T1');
+    expect(s.activeKey).toBe('table:T1');
+  });
+});
+
 describe('getBreakdown', () => {
   it('comanda vacía → totales cero', () => {
     const bd = useOrderStore.getState().getBreakdown();

@@ -19,9 +19,10 @@ import {
   payments,
   productVariants,
   products,
+  tables,
   withBusinessContext,
 } from '@tpv/db';
-import { orderIdSchema, payOrderSchema, upsertOrderSchema } from '@tpv/validators';
+import { orderIdSchema, payOrderSchema, tableIdSchema, upsertOrderSchema } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { deviceProcedure } from '../procedures';
@@ -272,15 +273,50 @@ export const ordersRouter = router({
           .where(eq(orders.businessId, ctx.businessId));
         const nextNum = numRow?.next ?? 1;
 
-        await tx.insert(orders).values({
-          id: input.orderId,
-          businessId: ctx.businessId,
-          orderNumber: nextNum,
-          type: input.type,
-          employeeId,
-          deviceId: ctx.deviceId ?? null,
-          notes: input.notes ?? null,
-        });
+        // Resolve tableId ownership and derive zoneId.
+        let resolvedTableId: string | null = null;
+        let resolvedZoneId: string | null = null;
+        if (input.tableId) {
+          const [tableRow] = await tx
+            .select({ id: tables.id, zoneId: tables.zoneId })
+            .from(tables)
+            .where(
+              and(
+                eq(tables.id, input.tableId),
+                eq(tables.businessId, ctx.businessId),
+                eq(tables.isActive, true),
+              ),
+            )
+            .limit(1);
+          if (!tableRow) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Table not found' });
+          }
+          resolvedTableId = tableRow.id;
+          resolvedZoneId = tableRow.zoneId;
+        }
+
+        try {
+          await tx.insert(orders).values({
+            id: input.orderId,
+            businessId: ctx.businessId,
+            orderNumber: nextNum,
+            type: input.type,
+            tableId: resolvedTableId,
+            zoneId: resolvedZoneId,
+            employeeId,
+            deviceId: ctx.deviceId ?? null,
+            notes: input.notes ?? null,
+          });
+        } catch (e) {
+          // Unique index orders_open_table_unique fires when the table already has an open order.
+          if ((e as { code?: string }).code === '23505') {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'Table already has an open order',
+            });
+          }
+          throw e;
+        }
 
         await tx.insert(orderEvents).values({
           orderId: input.orderId,
@@ -481,6 +517,8 @@ export const ordersRouter = router({
         id: orders.id,
         orderNumber: orders.orderNumber,
         status: orders.status,
+        tableId: orders.tableId,
+        zoneId: orders.zoneId,
         subtotalCents: orders.subtotalCents,
         taxTotalCents: orders.taxTotalCents,
         totalCents: orders.totalCents,
@@ -508,5 +546,54 @@ export const ordersRouter = router({
       .where(eq(orderItems.orderId, input.orderId));
 
     return { ...order, lines: items.map(mapItem) };
+  }),
+
+  getByTable: deviceProcedure.input(tableIdSchema).query(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [order] = await tx
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          status: orders.status,
+          tableId: orders.tableId,
+          zoneId: orders.zoneId,
+          subtotalCents: orders.subtotalCents,
+          taxTotalCents: orders.taxTotalCents,
+          totalCents: orders.totalCents,
+          version: orders.version,
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.tableId, input.tableId),
+            eq(orders.businessId, ctx.businessId),
+            eq(orders.status, 'open'),
+          ),
+        )
+        .limit(1);
+
+      if (!order) return null;
+
+      const items = await tx
+        .select({
+          id: orderItems.id,
+          productId: orderItems.productId,
+          variantId: orderItems.variantId,
+          nameSnapshot: orderItems.nameSnapshot,
+          unitPriceCents: orderItems.unitPriceCents,
+          taxRate: orderItems.taxRate,
+          quantity: orderItems.quantity,
+          lineTotalCents: orderItems.lineTotalCents,
+          notes: orderItems.notes,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id));
+
+      return { ...order, lines: items.map(mapItem) };
+    });
   }),
 });

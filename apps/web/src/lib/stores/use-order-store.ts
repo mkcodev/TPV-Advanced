@@ -36,11 +36,13 @@ interface SavedTotals {
   totalCents: number;
 }
 
-// Shape of a server order response (from orders.upsert or orders.getById).
+// Shape of a server order response (from orders.upsert, orders.getById, orders.getByTable).
 export interface ServerOrder {
   id: string;
   orderNumber: number;
   status: string;
+  tableId?: string | null;
+  zoneId?: string | null;
   subtotalCents: number;
   taxTotalCents: number;
   totalCents: number;
@@ -57,13 +59,43 @@ export interface ServerOrder {
   }>;
 }
 
-interface OrderState {
+// ── Multi-session types ───────────────────────────────────────────────────────
+
+type OrderType = 'counter' | 'dine_in';
+export type SessionKeyString = 'counter' | `table:${string}`;
+
+interface OrderSession {
   lines: OrderLine[];
-  // Persistence fields — set after first successful save.
   orderId: string | null;
   savedOrderNumber: number | null;
   savedTotals: SavedTotals | null;
   savedVersion: number | null;
+  tableId: string | null;
+  tableName: string | null;
+  zoneId: string | null;
+  zoneName: string | null;
+  type: OrderType;
+}
+
+const EMPTY_SESSION: OrderSession = {
+  lines: [],
+  orderId: null,
+  savedOrderNumber: null,
+  savedTotals: null,
+  savedVersion: null,
+  tableId: null,
+  tableName: null,
+  zoneId: null,
+  zoneName: null,
+  type: 'counter',
+};
+
+// ── Store interface ───────────────────────────────────────────────────────────
+
+interface OrderState extends OrderSession {
+  // Parked sessions (not the active one — active session lives in the flat props above).
+  sessions: Partial<Record<SessionKeyString, OrderSession>>;
+  activeKey: SessionKeyString | null;
 
   addProduct: (p: ProductForAdd) => void;
   incrementLine: (lineId: string) => void;
@@ -72,23 +104,68 @@ interface OrderState {
   removeLine: (lineId: string) => RemoveResult | null;
   restoreLine: (line: OrderLine, index: number) => void;
   duplicateLine: (lineId: string) => void;
+  // Clears active session (lines + ids) AND removes it from sessions Map.
   clear: () => void;
   countForProduct: (productId: string) => number;
   getBreakdown: () => OrderTaxBreakdown;
-  // Persistence actions.
   ensureOrderId: () => string;
   hydrateFromServer: (order: ServerOrder) => void;
   shouldHydrateFromServer: () => boolean;
+  // True when on a table with no local orderId/lines — should try getByTable.
+  shouldFetchOpenByTable: () => boolean;
+
+  // Session navigation — save current flat state to Map, restore target.
+  setActiveCounter: () => void;
+  setActiveTable: (tableId: string, zoneId: string, tableName?: string, zoneName?: string) => void;
+  clearActive: () => void; // alias for clear()
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function snapshotFlat(state: OrderState): OrderSession {
+  return {
+    lines: state.lines,
+    orderId: state.orderId,
+    savedOrderNumber: state.savedOrderNumber,
+    savedTotals: state.savedTotals,
+    savedVersion: state.savedVersion,
+    tableId: state.tableId,
+    tableName: state.tableName,
+    zoneId: state.zoneId,
+    zoneName: state.zoneName,
+    type: state.type,
+  };
+}
+
+function switchToSession(
+  state: OrderState,
+  newKey: SessionKeyString,
+  freshSession: OrderSession,
+): Partial<OrderState> {
+  // Park current session.
+  const updatedSessions: Partial<Record<SessionKeyString, OrderSession>> = {
+    ...state.sessions,
+    ...(state.activeKey !== null ? { [state.activeKey]: snapshotFlat(state) } : {}),
+  };
+  // Restore from parked sessions or start fresh.
+  const target = updatedSessions[newKey] ?? freshSession;
+  // Remove the target from parked Map (it's now the active session in flat props).
+  const { [newKey]: _, ...remainingSessions } = updatedSessions;
+  return {
+    ...target,
+    sessions: remainingSessions,
+    activeKey: newKey,
+  };
+}
+
+// ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useOrderStore = create<OrderState>()(
   persist(
     (set, get) => ({
-      lines: [],
-      orderId: null,
-      savedOrderNumber: null,
-      savedTotals: null,
-      savedVersion: null,
+      ...EMPTY_SESSION,
+      sessions: {},
+      activeKey: null,
 
       addProduct: (p) =>
         set((state) => {
@@ -163,13 +240,20 @@ export const useOrderStore = create<OrderState>()(
         }),
 
       clear: () =>
-        set({
-          lines: [],
-          orderId: null,
-          savedOrderNumber: null,
-          savedTotals: null,
-          savedVersion: null,
+        set((state) => {
+          const { [state.activeKey as SessionKeyString]: _, ...remainingSessions } =
+            state.sessions as Record<SessionKeyString, OrderSession>;
+          return {
+            lines: [],
+            orderId: null,
+            savedOrderNumber: null,
+            savedTotals: null,
+            savedVersion: null,
+            sessions: state.activeKey !== null ? remainingSessions : state.sessions,
+          };
         }),
+
+      clearActive: () => get().clear(),
 
       countForProduct: (productId) =>
         get()
@@ -212,24 +296,42 @@ export const useOrderStore = create<OrderState>()(
             taxRate: l.taxRate,
             quantity: l.quantity,
             notes: l.notes ?? undefined,
-            // Category display fields not available from server order_items —
-            // hydrated lines show without category color/image (acceptable for 1.6).
+            // Category display fields not available from server — hydrated lines show without them.
             categoryId: '',
             categoryColor: null,
             imageUrl: null,
           })),
         }),
 
-      // True when the client has a saved orderId but no local lines:
-      // the client can safely fetch and restore the order from the server.
-      // If lines exist, they are the source of truth for this device.
+      // True when the client has a saved orderId but no local lines — safe to fetch from server.
       shouldHydrateFromServer: () => {
         const { orderId, lines } = get();
         return orderId !== null && lines.length === 0;
       },
+
+      // True when on a fresh table session with no local data — try getByTable.
+      shouldFetchOpenByTable: () => {
+        const { orderId, lines, tableId } = get();
+        return orderId === null && lines.length === 0 && tableId !== null;
+      },
+
+      setActiveCounter: () =>
+        set((state) => switchToSession(state, 'counter', { ...EMPTY_SESSION, type: 'counter' })),
+
+      setActiveTable: (tableId, zoneId, tableName, zoneName) =>
+        set((state) =>
+          switchToSession(state, `table:${tableId}`, {
+            ...EMPTY_SESSION,
+            tableId,
+            tableName: tableName ?? null,
+            zoneId,
+            zoneName: zoneName ?? null,
+            type: 'dine_in',
+          }),
+        ),
     }),
     {
-      name: 'tpv.orderStore.v1',
+      name: 'tpv.orderStore.v2',
       storage: createJSONStorage(() => localStorage),
       // Prevent SSR hydration mismatch — call rehydrate() explicitly in client boot.
       skipHydration: true,
