@@ -67,13 +67,19 @@ function deviceCtx(overrides: Partial<Context> = {}): Context {
 const testRouter = router({ orders: ordersRouter });
 const createCaller = createCallerFactory(testRouter);
 
-// Queue de responses para un pago simple que cierra la comanda:
-// withBusinessContext → execute (set_config)
+const INV_ID = 'inv-00000000-0000-0000-0000-000000000001';
+
+// Queue de responses para un pago completo que cierra la comanda y genera factura:
+// withBusinessContext → execute (set_config) [handled by execute: () => Promise.resolve([])]
 // 1. SELECT orders FOR UPDATE       → [order row]
 // 2. SELECT orderItems (totals)     → [item row]
 // 3. INSERT payments RETURNING      → [{ id: PAY_ID }]
-// 4. UPDATE orders SET paid         → [{}]  (rowCount via raw length)
-// 5. INSERT orderEvents             → [{}]
+// 4. UPDATE orders SET paid         → [{}]  (rowCount via array length)
+// 5. execute (pg_advisory_xact_lock) [handled by execute stub]
+// 6. SELECT COALESCE MAX invoices   → [{ next: 1 }]
+// 7. INSERT invoices RETURNING      → [{ id: INV_ID }]
+// 8. INSERT invoiceTaxLines         → [{}]
+// 9. INSERT orderEvents             → [{}]
 function payQueue(
   order = { id: ORDER_ID, status: 'open', totalCents: 1000, orderNumber: 42, version: 2 },
   items = [{ lineTotalCents: 1000, taxRate: '10.00' }],
@@ -84,7 +90,10 @@ function payQueue(
     items, // 2. SELECT orderItems
     paymentRows, // 3. INSERT payments RETURNING
     [{}], // 4. UPDATE orders (rowCount = 1 via array length)
-    [{}], // 5. INSERT orderEvents
+    [{ next: 1 }], // 6. SELECT MAX(invoices.number)
+    [{ id: INV_ID }], // 7. INSERT invoices RETURNING
+    [{}], // 8. INSERT invoiceTaxLines
+    [{}], // 9. INSERT orderEvents
   ];
 }
 
@@ -198,6 +207,8 @@ describe('orders.pay — efectivo simple', () => {
     expect(result.paidCents).toBe(1000);
     expect(result.remainingCents).toBe(0);
     expect(result.changeCents).toBe(1000); // 2000 - 1000
+    expect(result.invoiceId).toBe(INV_ID);
+    expect(result.invoiceNumber).toBe(1);
 
     // El INSERT de payments debe llevar changeCents=1000 calculado en servidor.
     const valuesCall = calls.find((c) => c.method === 'values' && Array.isArray(c.args[0]));

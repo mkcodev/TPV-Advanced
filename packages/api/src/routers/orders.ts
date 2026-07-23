@@ -4,6 +4,7 @@
 // - El input no lleva precios ni totales: el servidor los lee de products.
 // - Los totales se calculan en servidor con @tpv/core.orderTaxBreakdown.
 // - Idempotencia: orderId cliente-generado actúa como PK (upsert).
+// ⚖️ Verificar spec AEAT vigente antes de producción real.
 
 import {
   calculateChangeCents,
@@ -13,16 +14,26 @@ import {
 } from '@tpv/core';
 import {
   type BusinessTransaction,
+  businesses,
+  invoiceTaxLines,
+  invoices,
   orderEvents,
   orderItems,
   orders,
   payments,
+  productCategories,
   productVariants,
   products,
   tables,
   withBusinessContext,
 } from '@tpv/db';
-import { orderIdSchema, payOrderSchema, tableIdSchema, upsertOrderSchema } from '@tpv/validators';
+import {
+  markLinesSentSchema,
+  orderIdSchema,
+  payOrderSchema,
+  tableIdSchema,
+  upsertOrderSchema,
+} from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { deviceProcedure } from '../procedures';
@@ -459,6 +470,10 @@ export const ordersRouter = router({
         .returning({ id: payments.id });
 
       // Close the order when fully paid.
+      let invoiceId: string | null = null;
+      let invoiceSeries: string | null = null;
+      let invoiceNumber: number | null = null;
+
       if (isFullyPaid) {
         const updated = await tx
           .update(orders)
@@ -477,6 +492,59 @@ export const ordersRouter = router({
             message: 'Order was modified concurrently. Please retry.',
           });
         }
+
+        // ⚖️ Verificar spec AEAT vigente antes de producción real.
+        // Generar factura simplificada atómica dentro de la misma transacción.
+        // ctx.deviceId es siempre string aquí: deviceProcedure garantiza auth.kind === 'device'
+        // y AuthContext.deviceId es string no-nullable para ese kind.
+        const deviceIdForInvoice = ctx.deviceId as string;
+
+        const now = new Date();
+        // Serie incluye el año — el contador reinicia automáticamente en año nuevo.
+        const series = `A${now.getUTCFullYear()}`;
+
+        // Lock por (business, serie) — serializa cobros simultáneos del mismo negocio y año.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${ctx.businessId} || ':invoice:' || ${series}))`,
+        );
+
+        const [numRow] = await tx
+          .select({ next: sql<number>`COALESCE(MAX(${invoices.number}), 0) + 1` })
+          .from(invoices)
+          .where(and(eq(invoices.businessId, ctx.businessId), eq(invoices.series, series)));
+        const nextInvoiceNumber = numRow?.next ?? 1;
+
+        const [invoiceRow] = await tx
+          .insert(invoices)
+          .values({
+            businessId: ctx.businessId,
+            orderId: order.id,
+            invoiceType: 'simplified',
+            series,
+            number: nextInvoiceNumber,
+            issueDate: now,
+            subtotalCents: breakdown.subtotalCents,
+            taxTotalCents: breakdown.taxTotalCents,
+            totalCents: breakdown.totalCents,
+            deviceId: deviceIdForInvoice,
+            employeeId,
+          })
+          .returning({ id: invoices.id });
+
+        if (invoiceRow && breakdown.buckets.length > 0) {
+          await tx.insert(invoiceTaxLines).values(
+            breakdown.buckets.map((b) => ({
+              invoiceId: invoiceRow.id,
+              taxRate: String(b.taxRate),
+              baseCents: b.baseCents,
+              taxCents: b.taxCents,
+            })),
+          );
+        }
+
+        invoiceId = invoiceRow?.id ?? null;
+        invoiceSeries = series;
+        invoiceNumber = nextInvoiceNumber;
       }
 
       await tx.insert(orderEvents).values({
@@ -503,6 +571,9 @@ export const ordersRouter = router({
         remainingCents,
         tipCents: summary.totalTipCents,
         changeCents: summary.totalChangeCents,
+        invoiceId,
+        invoiceSeries,
+        invoiceNumber,
       };
     });
   }),
@@ -594,6 +665,156 @@ export const ordersRouter = router({
         .where(eq(orderItems.orderId, order.id));
 
       return { ...order, lines: items.map(mapItem) };
+    });
+  }),
+
+  // ── invoice ─────────────────────────────────────────────────────────────────
+
+  // ⚖️ Verificar spec AEAT vigente antes de producción real.
+  getInvoice: deviceProcedure.input(orderIdSchema).query(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [invoice] = await tx
+        .select()
+        .from(invoices)
+        .where(and(eq(invoices.orderId, input.orderId), eq(invoices.businessId, ctx.businessId)))
+        .limit(1);
+      if (!invoice) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      const taxLines = await tx
+        .select()
+        .from(invoiceTaxLines)
+        .where(eq(invoiceTaxLines.invoiceId, invoice.id));
+
+      const [order] = await tx
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          status: orders.status,
+          tableId: orders.tableId,
+          zoneId: orders.zoneId,
+        })
+        .from(orders)
+        .where(eq(orders.id, invoice.orderId))
+        .limit(1);
+
+      const items = await tx
+        .select({
+          id: orderItems.id,
+          productId: orderItems.productId,
+          variantId: orderItems.variantId,
+          nameSnapshot: orderItems.nameSnapshot,
+          unitPriceCents: orderItems.unitPriceCents,
+          taxRate: orderItems.taxRate,
+          quantity: orderItems.quantity,
+          lineTotalCents: orderItems.lineTotalCents,
+          notes: orderItems.notes,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, invoice.orderId));
+
+      const [business] = await tx
+        .select({
+          name: businesses.name,
+          legalName: businesses.legalName,
+          taxId: businesses.taxId,
+          address: businesses.address,
+        })
+        .from(businesses)
+        .where(eq(businesses.id, ctx.businessId))
+        .limit(1);
+
+      return {
+        invoice,
+        taxLines: taxLines.map((tl) => ({
+          ...tl,
+          taxRate: Number(tl.taxRate),
+        })),
+        order,
+        items: items.map(mapItem),
+        business: business ?? null,
+      };
+    });
+  }),
+
+  // ── kitchen ──────────────────────────────────────────────────────────────────
+
+  markLinesSent: deviceProcedure.input(markLinesSentSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+    const employeeId = ctx.employeeId;
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [order] = await tx
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      await tx.insert(orderEvents).values({
+        orderId: order.id,
+        businessId: ctx.businessId,
+        eventType: 'kitchen_sent',
+        employeeId,
+        payload: { itemIds: input.itemIds },
+      });
+
+      return { ok: true };
+    });
+  }),
+
+  getKitchenPayload: deviceProcedure.input(orderIdSchema).query(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [order] = await tx
+        .select({ id: orders.id, orderNumber: orders.orderNumber, tableId: orders.tableId })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      const rows = await tx
+        .select({
+          id: orderItems.id,
+          nameSnapshot: orderItems.nameSnapshot,
+          quantity: orderItems.quantity,
+          notes: orderItems.notes,
+          printDestination: productCategories.printDestination,
+        })
+        .from(orderItems)
+        .innerJoin(products, eq(products.id, orderItems.productId))
+        .innerJoin(productCategories, eq(productCategories.id, products.categoryId))
+        .where(eq(orderItems.orderId, order.id));
+
+      const sentEvents = await tx
+        .select({ payload: orderEvents.payload })
+        .from(orderEvents)
+        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.eventType, 'kitchen_sent')));
+
+      const sentIds = new Set<string>();
+      for (const e of sentEvents) {
+        const ids = (e.payload as { itemIds?: string[] } | null)?.itemIds ?? [];
+        for (const id of ids) sentIds.add(id);
+      }
+
+      return {
+        order,
+        groups: {
+          kitchen: rows.filter((r) => r.printDestination === 'kitchen'),
+          bar: rows.filter((r) => r.printDestination === 'bar'),
+        },
+        pendingItemIds: rows
+          .filter((r) => r.printDestination !== 'none' && !sentIds.has(r.id))
+          .map((r) => r.id),
+      };
     });
   }),
 });

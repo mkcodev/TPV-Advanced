@@ -325,6 +325,8 @@
     },
     "order": {
       "title": "Comanda",
+      "sendToKitchen": "Enviar a cocina",
+      "reprintTicket": "Reimprimir ticket",
       "empty": "Sin artículos",
       "emptyHint": "Toca un producto para añadirlo",
       "clear": "Limpiar",
@@ -388,6 +390,31 @@
       "emptyZone": "Sin mesas en esta zona",
       "noZones": "No hay zonas configuradas",
       "noZonesCta": "Configura las zonas en el panel de administración"
+    },
+    "ticket": {
+      "title": "Ticket",
+      "invoice": "Factura simplificada",
+      "series": "Nº {series}-{number}",
+      "total": "TOTAL",
+      "iva": "IVA {rate}%",
+      "base": "Base",
+      "share": "Cuota",
+      "order": "Comanda #{number}",
+      "print": "Imprimir",
+      "close": "Cerrar",
+      "loading": "Cargando ticket…",
+      "noQrYet": "Verificación AEAT pendiente (Fase 2)",
+      "reprintHint": "Ticket generado automáticamente al cobrar"
+    },
+    "kitchen": {
+      "title": "Comanda de cocina",
+      "kitchen": "COCINA",
+      "bar": "BARRA",
+      "sent": "Enviado a cocina",
+      "empty": "Sin artículos para enviar",
+      "order": "#{number}",
+      "print": "Imprimir comanda",
+      "close": "Cerrar"
     },
     "auth": {
       "splash": {

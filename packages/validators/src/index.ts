@@ -314,3 +314,11 @@ export const payOrderSchema = z
   })
   .strict();
 export type PayOrderInput = z.infer<typeof payOrderSchema>;
+
+export const markLinesSentSchema = z
+  .object({
+    orderId: z.string().uuid(),
+    itemIds: z.array(z.string().uuid()).min(1),
+  })
+  .strict();
+export type MarkLinesSentInput = z.infer<typeof markLinesSentSchema>;

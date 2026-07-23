@@ -33,8 +33,17 @@ interface PaymentDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function openTicketWindow(orderId: string) {
+  window.open(
+    `/tpv/order/ticket/${orderId}`,
+    'ticket',
+    'width=420,height=800,menubar=no,toolbar=no',
+  );
+}
+
 export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
   const t = useTranslations('tpv.order.payment');
+  const tOrder = useTranslations('tpv.order');
 
   const { lines, orderId, savedOrderNumber, clear } = useOrderStore(
     useShallow((s) => ({
@@ -80,8 +89,21 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
   const { mutate, isPending } = trpc.orders.pay.useMutation({
     onSuccess: (data) => {
       if (data.status === 'paid') {
+        // Capturar orderId antes de clear() para el reprint.
+        const ticketOrderId = orderId;
+        if (ticketOrderId) {
+          openTicketWindow(ticketOrderId);
+        }
         clear();
-        toast.success(t('successPaid', { number: data.orderNumber }));
+        toast.success(t('successPaid', { number: data.orderNumber }), {
+          duration: 10000,
+          action: ticketOrderId
+            ? {
+                label: tOrder('reprintTicket'),
+                onClick: () => openTicketWindow(ticketOrderId),
+              }
+            : undefined,
+        });
         onOpenChange(false);
         resetDialog();
       } else {
