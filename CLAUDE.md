@@ -25,7 +25,7 @@ Primero web, empaquetar escritorio después.
 
 1. **Planificar antes de programar.** El trabajo no trivial lleva un plan corto (qué archivos se tocan, enfoque) antes de editar. Las decisiones de arquitectura/BD/legales se toman en `/docs`, no se improvisan en el código.
 2. **Tareas pequeñas y cerradas.** Un archivo o una función cada vez. Es mejor editar archivos existentes que reescribirlos.
-3. **No re-escanear el repo cada vez.** Usa la Sección 5 (mapa del proyecto), `/docs/DATABASE-SCHEMA.md` y este archivo como fuente de verdad. Abre solo los archivos que necesitas cambiar.
+3. **No re-escanear el repo cada vez.** Usa la Sección 4 (mapa del proyecto), `/docs/DATABASE-SCHEMA.md` y este archivo como fuente de verdad. Abre solo los archivos que necesitas cambiar.
 4. **El dinero son enteros (céntimos).** Nunca uses floats para dinero. `4,50 €` → `450`. Todas las columnas y variables `_cents` son enteros.
 5. **Siempre multi-negocio.** El `business_id` se deriva SIEMPRE del contexto de autenticación (middleware `businessProcedure`). Está **prohibido aceptar `business_id` como parámetro de entrada en cualquier endpoint**. Nunca escribas una consulta que pueda filtrar datos entre negocios.
 6. **Las tablas legales son de solo añadir.** Nunca UPDATE/DELETE en `billing_records`, `invoices`, `invoice_tax_lines`, `system_events`, `stock_movements`, `time_entries`. Las correcciones se hacen con registros nuevos.
@@ -66,41 +66,82 @@ Primero web, empaquetar escritorio después.
 
 ---
 
-## 4. Estructura del monorepo
+## 4. Mapa del proyecto — dónde vive cada cosa
 
-```
-next-TPV/
-├─ apps/
-│  ├─ web/          # Next.js: TPV (navegador) + panel admin + landing + PWA /waiter
-│  ├─ desktop/      # Cáscara Electron que envuelve la UI web/POS
-│  └─ mobile/       # (diferido) Expo React Native — solo si hay necesidad nativa real
-├─ packages/
-│  ├─ ui/           # Componentes React DOM compartidos (basados en shadcn)
-│  ├─ core/         # Lógica de dominio: precios, IVA, totales, reglas de comanda, billing puro
-│  ├─ db/           # Esquema Drizzle, migraciones, consultas
-│  ├─ api/          # Routers tRPC
-│  ├─ validators/   # Esquemas Zod compartidos
-│  └─ config/       # (futuro) presets de tsconfig, biome, tailwind
-├─ docs/
-│  ├─ PLANIFICACION-TPV.md    # Visión, funcionalidades, roadmap, legal
-│  ├─ DATABASE-SCHEMA.md      # Fuente de verdad del modelo de datos
-│  ├─ DESIGN-SYSTEM.md        # Tokens, componentes y reglas estrictas de UI
-│  ├─ AUTH-DEVICES.md         # Autenticación de dispositivos y PIN de empleados
-│  ├─ PRINTING.md             # Especificación de impresión (ticket, cocina)
-│  ├─ PASOS-A-SEGUIR.md       # Guía lineal de pasos (empieza aquí)
-│  ├─ ROADMAP-Y-PROMPTS.md    # Fases, tareas y prompts para Claude Code
-│  └─ CLAUDE-CODE-SETUP.md    # Cómo continuar en Claude Code
-└─ CLAUDE.md
-```
+> Lee este índice antes de explorar el repo. Las rutas son relativas a la raíz del monorepo.
 
-> Estado actual: esqueleto (config raíz + `packages/*` con starters) existe. Las `apps/*` se generan con sus scaffolders oficiales (ver README de cada carpeta).
+### Esquema de BD (Drizzle)
+| Dominio | Archivo |
+|---|---|
+| Cuentas / negocios | `packages/db/src/schema/accounts.ts` |
+| Auth (devices, employees, sessions) | `packages/db/src/schema/auth.ts` |
+| Catálogo (categories, products) | `packages/db/src/schema/catalog.ts` |
+| Sala y mesas (zones, tables) | `packages/db/src/schema/floor.ts` |
+| Comandas (orders, order_items) | `packages/db/src/schema/orders.ts` |
+| Facturación / Veri*factu | `packages/db/src/schema/billing.ts` |
+| Inventario | `packages/db/src/schema/inventory.ts` |
+| Helper (withBusinessContext, tenant) | `packages/db/src/tenant.ts` |
 
-**Dónde vive cada cosa (para no buscar):**
-- Modelo de datos / tablas → `packages/db` + `docs/DATABASE-SCHEMA.md`
-- Cálculos de negocio (totales, IVA, divisiones) → `packages/core`
-- Módulo legal / Veri*factu → `packages/core/billing` (funciones puras sin IO, las más testeadas)
-- Endpoints de la API → `packages/api`
-- UI reutilizable → `packages/ui`
+### Validadores Zod (`packages/validators/src/index.ts`)
+Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `createTableSchema`, `updateTableSchema`, `createZoneSchema`, `updateZoneSchema`, `createProductSchema`, `updateProductSchema`, `createCategorySchema`, etc.
+
+### Routers tRPC (`packages/api/src/routers/`)
+| Router | Archivo | Patrón de referencia |
+|---|---|---|
+| Raíz (registra todos) | `root.ts` | — |
+| Catálogo (categorías + productos) | `catalog.ts` | ⭐ patrón de referencia para routers nuevos |
+| Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts` |
+| Comandas (upsert, pay, getByTable…) | `orders.ts` | — |
+| Auth (device pairing, PIN login) | `auth.ts` | — |
+| Me (perfil del usuario admin) | `me.ts` | — |
+
+**Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`
+
+**Tests de routers:** `packages/api/src/__tests__/` — patrón `queuedDb` (ver `catalog-router.test.ts` como referencia).
+
+### Stores Zustand (`apps/web/src/lib/stores/`)
+| Store | Archivo | Qué gestiona |
+|---|---|---|
+| Comanda activa (multi-sesión) | `use-order-store.ts` | ⭐ patrón de referencia; sesiones por mesa + barra |
+| Dispositivo / pairing | `use-device-store.ts` | token de dispositivo, businessId |
+| Empleado activo (PIN) | `use-employee-store.ts` | employeeId, nombre, rol |
+
+### Componentes TPV (`apps/web/src/components/tpv/`)
+| Grupo | Archivos clave |
+|---|---|
+| Shell de venta | `tpv-shell.tsx`, `tpv-header.tsx`, `tpv-order-sidebar.tsx` |
+| Productos | `tpv-product-grid.tsx`, `tpv-product-card.tsx`, `tpv-category-tabs.tsx`, `tpv-search-input.tsx` |
+| Comanda | `tpv-order-lines.tsx`, `tpv-order-line.tsx`, `tpv-order-totals.tsx`, `tpv-clear-button.tsx` |
+| Guardar / hidratación | `tpv-save-order-button.tsx`, `tpv-order-hydrator.tsx` |
+| Cobro | `payment/payment-dialog.tsx`, `payment/bill-button.tsx`, `payment/cash-panel.tsx` |
+| Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx` |
+| Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx`, `floor/tpv-floor-counter-button.tsx` |
+
+### Componentes Admin (`apps/web/src/components/admin/`)
+| Grupo | Archivos clave |
+|---|---|
+| Shell (sidebar, nav) | `shell/app-sidebar.tsx`, `shell/nav-group.tsx`, `shell/user-menu.tsx` |
+| Catálogo | `catalog/category-form-dialog.tsx` ⭐, `catalog/product-form-dialog.tsx`, `catalog/categories-panel.tsx`, `catalog/products-panel.tsx` |
+| Sala y mesas | `floor/zones-panel.tsx`, `floor/floor-canvas.tsx`, `floor/table-editor-item.tsx`, `floor/zone-form-dialog.tsx`, `floor/table-form-dialog.tsx` |
+
+### Rutas Next.js (`apps/web/src/app/`)
+| Ruta | Archivo |
+|---|---|
+| `/tpv` — plano de sala | `tpv/page.tsx` |
+| `/tpv/order` — pantalla de venta | `tpv/order/page.tsx` |
+| `/admin` — dashboard | `(admin)/admin/(shell)/page.tsx` |
+| `/admin/catalog` | `(admin)/admin/(shell)/catalog/page.tsx` |
+| `/admin/floor` | `(admin)/admin/(shell)/floor/page.tsx` |
+| `/api/trpc/[trpc]` — handler tRPC | `api/trpc/[trpc]/route.ts` |
+
+### Config / infra
+| Qué | Dónde |
+|---|---|
+| Nav items admin (status: ready/soon) | `apps/web/src/lib/admin/nav-config.ts` |
+| i18n (todas las claves ES) | `apps/web/messages/es.json` |
+| tRPC client-side | `apps/web/src/lib/trpc/client.ts` |
+| Tokens de diseño CSS | `packages/ui/src/styles/tokens.css` |
+| Componentes UI base (shadcn) | `packages/ui/src/components/` |
 
 ---
 
