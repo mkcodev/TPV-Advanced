@@ -3,17 +3,16 @@
 import { useOrderStore } from '@/lib/stores/use-order-store';
 import { Separator } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
+import { useShallow } from 'zustand/react/shallow';
 import { TpvBackToFloorButton } from './floor/tpv-back-to-floor-button';
 import { TpvEmployeeChip } from './tpv-employee-chip';
 import { TpvSyncPill } from './tpv-sync-pill';
 
 export function TpvHeader() {
   const t = useTranslations('tpv');
-  const { type, tableName, zoneName } = useOrderStore((s) => ({
-    type: s.type,
-    tableName: s.tableName,
-    zoneName: s.zoneName,
-  }));
+  const { type, tableName, zoneName } = useOrderStore(
+    useShallow((s) => ({ type: s.type, tableName: s.tableName, zoneName: s.zoneName })),
+  );
 
   const isTableOrder = type === 'dine_in';
   const contextLabel =
