@@ -4,6 +4,7 @@ import { useOrderStore } from '@/lib/stores/use-order-store';
 import { Separator } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
 import { useShallow } from 'zustand/react/shallow';
+import { TpvCashChip } from './cash/tpv-cash-chip';
 import { TpvBackToFloorButton } from './floor/tpv-back-to-floor-button';
 import { TpvEmployeeChip } from './tpv-employee-chip';
 import { TpvSyncPill } from './tpv-sync-pill';
@@ -40,7 +41,8 @@ export function TpvHeader() {
 
       <TpvSyncPill />
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <TpvCashChip />
         <TpvEmployeeChip />
       </div>
     </header>

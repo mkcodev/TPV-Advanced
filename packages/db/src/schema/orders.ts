@@ -80,6 +80,10 @@ export const cashSessions = pgTable(
   },
   (t) => [
     index('cash_sessions_business_id_idx').on(t.businessId),
+    // At most one 'open' session per device — prevents duplicate cash drawers.
+    uniqueIndex('cash_sessions_open_device_unique')
+      .on(t.deviceId)
+      .where(sql`${t.status} = 'open'`),
     check('cash_sessions_status_check', inEnum(t.status, CASH_SESSION_STATUSES)),
     tenantSelectPolicy('cash_sessions'),
   ],

@@ -53,6 +53,7 @@ const BIZ_B = 'bbb00000-0000-0000-0000-000000000001';
 const DEV_ID = 'dev00000-0000-0000-0000-000000000001';
 const EMP_ID = 'emp00000-0000-0000-0000-000000000001';
 const INV_ID = 'inv00000-0000-0000-0000-000000000001';
+const SESSION_ID = 'ses00000-0000-0000-0000-000000000001';
 
 function makeOrder(id: string, totalCents: number, version = 1) {
   return { id, status: 'open', totalCents, orderNumber: 1, version };
@@ -70,12 +71,13 @@ function deviceCtx(bizId = BIZ_A, devId: string | null = DEV_ID): Context {
 // execute (set_config y pg_advisory_xact_lock) son absorbidos por execute stub.
 // 1. SELECT order FOR UPDATE        → [order]
 // 2. SELECT orderItems (totals)     → [items]
-// 3. INSERT payments RETURNING      → [{ id: 'pay-id' }]
-// 4. UPDATE orders SET paid         → [{}]
-// 5. SELECT MAX(invoices.number)    → [{ next: N }]
-// 6. INSERT invoices RETURNING      → [{ id: INV_ID }]
-// 7. INSERT invoiceTaxLines         → [{}]
-// 8. INSERT orderEvents             → [{}]
+// 3. SELECT cashSessions (open)     → [{ id: SESSION_ID }]  (cash requiere sesión)
+// 4. INSERT payments RETURNING      → [{ id: 'pay-id' }]
+// 5. UPDATE orders SET paid         → [{}]
+// 6. SELECT MAX(invoices.number)    → [{ next: N }]
+// 7. INSERT invoices RETURNING      → [{ id: INV_ID }]
+// 8. INSERT invoiceTaxLines         → [{}]
+// 9. INSERT orderEvents             → [{}]
 function fullPayQueue(
   orderId: string,
   items: { lineTotalCents: number; taxRate: string }[],
@@ -85,6 +87,7 @@ function fullPayQueue(
   return [
     [makeOrder(orderId, total)],
     items,
+    [{ id: SESSION_ID }],
     [{ id: 'pay-id' }],
     [{}],
     [{ next: nextInvoiceNumber }],
@@ -182,6 +185,7 @@ describe('orders.pay — pago parcial no genera invoice', () => {
     const { db } = queuedDb([
       [makeOrder(ORDER_ID_1, 2000)],
       [{ lineTotalCents: 2000, taxRate: '10.00' }],
+      [{ id: SESSION_ID }], // SELECT cashSessions (cash requiere sesión incluso en parcial)
       [{ id: 'pay-id' }],
       [{}], // INSERT orderEvents
     ]);
@@ -212,6 +216,7 @@ describe('orders.pay — correlativa de factura', () => {
     const { db } = queuedDb([
       [makeOrder(ORDER_ID_1, 500)],
       [{ lineTotalCents: 500, taxRate: '10.00' }],
+      [{ id: SESSION_ID }], // SELECT cashSessions
       [{ id: 'pay-id' }],
       [{}],
       [{ next: 1 }], // MAX(invoices.number) para BIZ_B = 0 → next = 1

@@ -54,6 +54,7 @@ const DEV_ID = 'dev-00000000-0000-0000-0000-000000000001';
 const EMP_ID = 'emp-00000000-0000-0000-0000-000000000001';
 const ORDER_ID = '11111111-0000-0000-0000-000000000001';
 const PAY_ID = 'pay-00000000-0000-0000-0000-000000000001';
+const SESSION_ID = 'ses-00000000-0000-0000-0000-000000000001';
 
 function deviceCtx(overrides: Partial<Context> = {}): Context {
   return {
@@ -73,13 +74,14 @@ const INV_ID = 'inv-00000000-0000-0000-0000-000000000001';
 // withBusinessContext → execute (set_config) [handled by execute: () => Promise.resolve([])]
 // 1. SELECT orders FOR UPDATE       → [order row]
 // 2. SELECT orderItems (totals)     → [item row]
-// 3. INSERT payments RETURNING      → [{ id: PAY_ID }]
-// 4. UPDATE orders SET paid         → [{}]  (rowCount via array length)
-// 5. execute (pg_advisory_xact_lock) [handled by execute stub]
-// 6. SELECT COALESCE MAX invoices   → [{ next: 1 }]
-// 7. INSERT invoices RETURNING      → [{ id: INV_ID }]
-// 8. INSERT invoiceTaxLines         → [{}]
-// 9. INSERT orderEvents             → [{}]
+// 3. SELECT cashSessions (open)     → [{ id: SESSION_ID }]  (cash requiere sesión)
+// 4. INSERT payments RETURNING      → [{ id: PAY_ID }]
+// 5. UPDATE orders SET paid         → [{}]  (rowCount via array length)
+// 6. execute (pg_advisory_xact_lock) [handled by execute stub]
+// 7. SELECT COALESCE MAX invoices   → [{ next: 1 }]
+// 8. INSERT invoices RETURNING      → [{ id: INV_ID }]
+// 9. INSERT invoiceTaxLines         → [{}]
+// 10. INSERT orderEvents             → [{}]
 function payQueue(
   order = { id: ORDER_ID, status: 'open', totalCents: 1000, orderNumber: 42, version: 2 },
   items = [{ lineTotalCents: 1000, taxRate: '10.00' }],
@@ -88,12 +90,13 @@ function payQueue(
   return [
     [order], // 1. SELECT order FOR UPDATE
     items, // 2. SELECT orderItems
-    paymentRows, // 3. INSERT payments RETURNING
-    [{}], // 4. UPDATE orders (rowCount = 1 via array length)
-    [{ next: 1 }], // 6. SELECT MAX(invoices.number)
-    [{ id: INV_ID }], // 7. INSERT invoices RETURNING
-    [{}], // 8. INSERT invoiceTaxLines
-    [{}], // 9. INSERT orderEvents
+    [{ id: SESSION_ID }], // 3. SELECT cashSessions (open session for cash)
+    paymentRows, // 4. INSERT payments RETURNING
+    [{}], // 5. UPDATE orders (rowCount = 1 via array length)
+    [{ next: 1 }], // 7. SELECT MAX(invoices.number)
+    [{ id: INV_ID }], // 8. INSERT invoices RETURNING
+    [{}], // 9. INSERT invoiceTaxLines
+    [{}], // 10. INSERT orderEvents
   ];
 }
 
@@ -258,13 +261,14 @@ describe('orders.pay — mixto', () => {
 
 describe('orders.pay — parcial', () => {
   it('pago de 500 sobre total 2000 → status open, remainingCents 1500', async () => {
-    // Pago parcial: no hay UPDATE de orders ni step 4.
+    // Pago parcial con card: no hay UPDATE de orders ni factura.
     const { db } = queuedDb([
       [{ id: ORDER_ID, status: 'open', totalCents: 2000, orderNumber: 3, version: 1 }], // 1. SELECT order
       [{ lineTotalCents: 2000, taxRate: '21.00' }], // 2. SELECT items
-      [{ id: PAY_ID }], // 3. INSERT payments RETURNING
-      // no step 4 (UPDATE) para pago parcial
-      [{}], // 4. INSERT orderEvents
+      [], // 3. SELECT cashSessions (sin sesión → null; card no requiere)
+      [{ id: PAY_ID }], // 4. INSERT payments RETURNING
+      // no step 5 (UPDATE) para pago parcial
+      [{}], // 5. INSERT orderEvents
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.orders.pay({
@@ -309,5 +313,82 @@ describe('orders.pay — atribución de empleado', () => {
     // El input no tiene employeeId — la línea anterior lo verifica implícitamente.
     expect(row).not.toHaveProperty('businessId', 'other-business');
     expect(row?.businessId).toBe(BIZ_ID);
+  });
+});
+
+// ── Vinculación con sesión de caja (1.11) ────────────────────────────────────
+
+describe('orders.pay — cash sin sesión abierta', () => {
+  it('lanza PRECONDITION_FAILED al cobrar en efectivo sin sesión open', async () => {
+    const { db } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', totalCents: 1000, orderNumber: 1, version: 1 }],
+      [{ lineTotalCents: 1000, taxRate: '10.00' }],
+      [], // SELECT cashSessions → sin sesión
+    ]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    await expect(caller.orders.pay(CASH_INPUT)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+  });
+});
+
+describe('orders.pay — card sin sesión → permitido', () => {
+  it('cobro con tarjeta sin sesión open funciona y cashSessionId=null', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', totalCents: 1000, orderNumber: 1, version: 1 }],
+      [{ lineTotalCents: 1000, taxRate: '10.00' }],
+      [], // SELECT cashSessions → sin sesión
+      [{ id: PAY_ID }], // INSERT payments
+      [{}], // UPDATE orders
+      [{ next: 1 }], // SELECT MAX invoices
+      [{ id: INV_ID }], // INSERT invoices
+      [{}], // INSERT invoiceTaxLines
+      [{}], // INSERT orderEvents
+    ]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.orders.pay({
+      orderId: ORDER_ID,
+      payments: [{ method: 'card', amountCents: 1000 }],
+    });
+    expect(result.status).toBe('paid');
+
+    const valuesCall = calls.find((c) => c.method === 'values' && Array.isArray(c.args[0]));
+    const row = (valuesCall?.args[0] as unknown[])?.at(0) as Record<string, unknown>;
+    expect(row?.cashSessionId).toBeNull();
+  });
+});
+
+describe('orders.pay — con sesión open → payments vinculados', () => {
+  it('cash con sesión open lleva cashSessionId correcto en el INSERT', async () => {
+    const { db, calls } = queuedDb(payQueue());
+    const caller = createCaller({ ...deviceCtx(), db });
+    await caller.orders.pay(CASH_INPUT);
+
+    const valuesCall = calls.find((c) => c.method === 'values' && Array.isArray(c.args[0]));
+    const row = (valuesCall?.args[0] as unknown[])?.at(0) as Record<string, unknown>;
+    expect(row?.cashSessionId).toBe(SESSION_ID);
+  });
+
+  it('card con sesión open también lleva cashSessionId (trazabilidad)', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', totalCents: 1000, orderNumber: 1, version: 1 }],
+      [{ lineTotalCents: 1000, taxRate: '10.00' }],
+      [{ id: SESSION_ID }], // SELECT cashSessions → sesión open
+      [{ id: PAY_ID }],
+      [{}],
+      [{ next: 1 }],
+      [{ id: INV_ID }],
+      [{}],
+      [{}],
+    ]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    await caller.orders.pay({
+      orderId: ORDER_ID,
+      payments: [{ method: 'card', amountCents: 1000 }],
+    });
+
+    const valuesCall = calls.find((c) => c.method === 'values' && Array.isArray(c.args[0]));
+    const row = (valuesCall?.args[0] as unknown[])?.at(0) as Record<string, unknown>;
+    expect(row?.cashSessionId).toBe(SESSION_ID);
   });
 });

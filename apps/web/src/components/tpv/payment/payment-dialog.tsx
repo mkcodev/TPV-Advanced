@@ -44,6 +44,7 @@ function openTicketWindow(orderId: string) {
 export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
   const t = useTranslations('tpv.order.payment');
   const tOrder = useTranslations('tpv.order');
+  const tCash = useTranslations('tpv.cash');
 
   const { lines, orderId, savedOrderNumber, clear } = useOrderStore(
     useShallow((s) => ({
@@ -114,7 +115,11 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
       }
     },
     onError: (err) => {
-      toast.error(err.message || t('error'));
+      if (err.data?.code === 'PRECONDITION_FAILED') {
+        toast.error(tCash('errors.noOpenSessionCash'));
+      } else {
+        toast.error(err.message || t('error'));
+      }
     },
   });
 

@@ -469,6 +469,88 @@
         "change": "Cambiar empleado",
         "logout": "Cerrar sesión"
       }
+    },
+    "cash": {
+      "status": {
+        "closed": "Caja cerrada",
+        "open": "Caja abierta"
+      },
+      "openAction": "Abrir caja",
+      "closeAction": "Cerrar caja",
+      "movementAction": "Movimiento",
+      "zReportAction": "Ver informe Z",
+      "reprintZ": "Reimprimir Z",
+      "openDialog": {
+        "title": "Abrir caja",
+        "description": "Introduce el fondo inicial de efectivo.",
+        "openingAmount": "Fondo inicial",
+        "confirm": "Abrir",
+        "cancel": "Cancelar",
+        "success": "Caja abierta",
+        "error": "No se pudo abrir la caja"
+      },
+      "closeDialog": {
+        "title": "Cerrar caja",
+        "description": "Cuenta el efectivo del cajón.",
+        "counted": "Efectivo contado",
+        "blind": "Cierre ciego",
+        "blindHint": "Introduce el importe sin ver el esperado. Anti-fraude.",
+        "expected": "Esperado",
+        "difference": "Descuadre",
+        "confirm": "Cerrar caja",
+        "cancel": "Cancelar",
+        "viewZReport": "Ver informe Z",
+        "confirmMismatchTitle": "Hay un descuadre",
+        "confirmMismatchDescription": "La caja se ha cerrado con el descuadre registrado.",
+        "success": "Caja cerrada",
+        "error": "No se pudo cerrar la caja"
+      },
+      "movementDialog": {
+        "title": "Movimiento de caja",
+        "type": "Tipo",
+        "typeIn": "Entrada",
+        "typeOut": "Salida",
+        "amount": "Importe",
+        "reason": "Motivo",
+        "reasonPlaceholder": "Pagar al repartidor, retirar efectivo…",
+        "confirm": "Registrar",
+        "cancel": "Cancelar",
+        "success": "Movimiento registrado",
+        "error": "No se pudo registrar el movimiento"
+      },
+      "zReport": {
+        "title": "Informe Z",
+        "xTitle": "Informe X (sesión abierta)",
+        "openedAt": "Apertura",
+        "closedAt": "Cierre",
+        "openedBy": "Abierta por",
+        "closedBy": "Cerrada por",
+        "opening": "Fondo",
+        "byMethod": "Ventas por método",
+        "byEmployee": "Ventas por empleado",
+        "movements": "Movimientos",
+        "payIn": "Entrada",
+        "payOut": "Salida",
+        "cashSales": "Ventas en efectivo",
+        "expected": "Esperado",
+        "counted": "Contado",
+        "difference": "Descuadre",
+        "total": "Total",
+        "print": "Imprimir",
+        "close": "Cerrar",
+        "loading": "Cargando informe…",
+        "method": {
+          "cash": "Efectivo",
+          "card": "Tarjeta",
+          "bizum": "Bizum",
+          "other": "Otros"
+        }
+      },
+      "errors": {
+        "noOpenSessionCash": "Abre caja antes de cobrar en efectivo",
+        "alreadyOpen": "Ya hay una caja abierta en este dispositivo",
+        "sessionClosed": "La sesión de caja ya está cerrada"
+      }
     }
   }
 }

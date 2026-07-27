@@ -15,6 +15,7 @@ import {
 import {
   type BusinessTransaction,
   businesses,
+  cashSessions,
   invoiceTaxLines,
   invoices,
   orderEvents,
@@ -447,6 +448,30 @@ export const ordersRouter = router({
       const isFullyPaid = summary.totalPaidCents === totalCents;
       const remainingCents = totalCents - summary.totalPaidCents;
 
+      // Resolve the open cash session for this device (if any).
+      const [openSession] = await tx
+        .select({ id: cashSessions.id })
+        .from(cashSessions)
+        .where(
+          and(
+            eq(cashSessions.businessId, ctx.businessId),
+            eq(cashSessions.deviceId, ctx.deviceId as string),
+            eq(cashSessions.status, 'open'),
+          ),
+        )
+        .limit(1);
+
+      // Cash payments require an open session (card/bizum are allowed without one).
+      const hasCash = input.payments.some((p) => p.method === 'cash');
+      if (hasCash && !openSession) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Open cash session required to accept cash payments',
+        });
+      }
+
+      const cashSessionId = openSession?.id ?? null;
+
       // Insert one payment row per method.
       const inserted = await tx
         .insert(payments)
@@ -454,7 +479,7 @@ export const ordersRouter = router({
           input.payments.map((p) => ({
             businessId: ctx.businessId,
             orderId: order.id,
-            cashSessionId: null, // linked in task 1.11
+            cashSessionId,
             method: p.method,
             amountCents: p.amountCents,
             tipCents: p.tipCents ?? 0,

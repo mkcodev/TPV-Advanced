@@ -322,3 +322,27 @@ export const markLinesSentSchema = z
   })
   .strict();
 export type MarkLinesSentInput = z.infer<typeof markLinesSentSchema>;
+
+// Cash session schemas
+
+export const openCashSessionSchema = z
+  .object({ openingAmountCents: z.number().int().nonnegative() })
+  .strict();
+export type OpenCashSessionInput = z.infer<typeof openCashSessionSchema>;
+
+export const closeCashSessionSchema = z
+  .object({ countedAmountCents: z.number().int().nonnegative() })
+  .strict();
+export type CloseCashSessionInput = z.infer<typeof closeCashSessionSchema>;
+
+export const addCashMovementSchema = z
+  .object({
+    type: z.enum(['pay_in', 'pay_out']),
+    amountCents: z.number().int().positive(),
+    reason: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export type AddCashMovementInput = z.infer<typeof addCashMovementSchema>;
+
+export const getZReportSchema = z.object({ sessionId: z.string().uuid() }).strict();
+export type GetZReportInput = z.infer<typeof getZReportSchema>;
