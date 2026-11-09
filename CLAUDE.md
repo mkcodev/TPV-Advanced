@@ -93,8 +93,8 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 |---|---|---|
 | Raíz (registra todos) | `root.ts` | — |
 | Catálogo (categorías + productos) | `catalog.ts` | ⭐ patrón de referencia para routers nuevos |
-| Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts` |
-| Comandas (upsert, pay, getByTable…) | `orders.ts` | — |
+| Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts`. `listWithOpenOrders` = plano en UNA sentencia (total, pendiente, empleado) |
+| Comandas (upsert, pay, requestBill, getByTable…) | `orders.ts` | `requestBill` fija `bill_requested_at`; `upsert` lo anula si la comanda crece |
 | Auth (device pairing, PIN login) | `auth.ts` | — |
 | Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol. `cashSumsColumns` es el único sitio que agrega el efectivo (una sentencia; lo usan `close` y `getExpected`) |
 | Ajustes del negocio (`blind_cash_close`) + `getName` (nombre para la cabecera del TPV) | `business.ts` | `getSettings`/`updateSettings` con `managerProcedure`; `getName` con `deviceProcedure`; ver `docs/PASO-0.5.md` |
@@ -120,9 +120,9 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Guardar / hidratación | `tpv-save-order-button.tsx`, `tpv-order-hydrator.tsx` |
 | Cobro | `payment/payment-dialog.tsx`, `payment/bill-button.tsx`, `payment/cash-panel.tsx` |
 | Caja / informe Z | `cash/open-cash-session-dialog.tsx`, `cash/close-cash-session-dialog.tsx`, `cash/cash-movement-dialog.tsx`, `cash/z-report.tsx`, `cash/tpv-cash-chip.tsx` |
-| Impresión (ticket simplificado, comanda cocina) | `print/invoice-ticket.tsx`, `print/kitchen-order.tsx`, `tpv-send-to-kitchen-button.tsx` |
+| Impresión (ticket simplificado, comanda cocina) | `print/invoice-ticket.tsx`, `print/kitchen-order.tsx`, `tpv-send-to-kitchen-button.tsx`, `tpv-request-bill-button.tsx` (pedir cuenta) |
 | Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx` |
-| Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx`, `floor/tpv-floor-counter-button.tsx` |
+| Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx` (guardado optimista), `floor/tpv-floor-counter-button.tsx`; lógica pura en `lib/tpv/floor-state.ts` |
 
 ### Componentes Admin (`apps/web/src/components/admin/`)
 | Grupo | Archivos clave |

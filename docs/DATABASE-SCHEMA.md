@@ -420,7 +420,14 @@ La cuenta de una mesa. Se puede **aparcar** (dejar abierta) y volver. Soporta di
 | split_from_order_id | uuid FK→orders (nullable) | Para **dividir cuenta** |
 | cash_session_id | uuid FK→cash_sessions (nullable) | Arqueo |
 | opened_at, closed_at | timestamptz | |
+| bill_requested_at | timestamptz (nullable) | "Pedir cuenta": la mesa pasa a *pendiente de cobro* en el plano. NULL = no pedida. Migración 0007 |
 | created_at, updated_at | timestamptz | |
+
+**Reglas de `bill_requested_at`** (ver `docs/PASO-0.5.md`):
+- `orders.requestBill` lo fija en una comanda **abierta con líneas** (si no, `PRECONDITION_FAILED`). Es idempotente: conserva la primera hora y no repite el evento `bill_requested`.
+- **Añadir líneas o subir cantidades** en `orders.upsert` lo pone otra vez a NULL (la mesa vuelve a "ocupada").
+- Un pago parcial y quitar o bajar líneas **no lo tocan**. Al cobrar del todo la comanda pasa a `paid` y la mesa queda libre.
+- El plano deriva el estado de la comanda abierta (`tables.status` es una caché que nadie escribe): libre / ocupada / pendiente de cobro.
 
 ### order_items (líneas de comanda)
 Cada producto añadido. Guarda **snapshots** de nombre/precio/IVA (no cambian aunque cambie el producto).

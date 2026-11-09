@@ -122,6 +122,9 @@ export const orders = pgTable(
     cashSessionId: uuid('cash_session_id').references(() => cashSessions.id),
     openedAt: timestamp('opened_at', { withTimezone: true }).defaultNow().notNull(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    // "Pedir cuenta": la mesa pasa a "pendiente de cobro". NULL = no pedida. Añadir líneas o
+    // subir cantidades la vuelve a NULL; pagos parciales y quitar líneas no la tocan.
+    billRequestedAt: timestamp('bill_requested_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

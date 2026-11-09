@@ -3,7 +3,8 @@
 // Reads (list): businessProcedure. Writes (create/update/setActive): managerProcedure.
 // listWithOpenOrders: deviceProcedure (usado desde el TPV).
 
-import { orders, tables, zones } from '@tpv/db';
+import { pendingCents } from '@tpv/core';
+import { employees, orders, payments, tables, zones } from '@tpv/db';
 import type { Database } from '@tpv/db';
 import {
   createTableSchema,
@@ -17,7 +18,7 @@ import {
   updateZoneSchema,
 } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { deviceProcedure, managerProcedure } from '../procedures';
 import { businessProcedure, router } from '../trpc';
@@ -130,11 +131,23 @@ const tablesRouter = router({
       );
   }),
 
-  // Used by the TPV floor view. Returns active tables with open order id (null = free).
+  // Used by the TPV floor view. Returns active tables with their open order (null = free).
   // Ignores tables.status cache — queries orders directly for accuracy.
+  // UNA sola sentencia (mesas + comanda abierta + empleado + pagado): sin N+1 en la pantalla
+  // más usada. El total sale de orders.total_cents (el servidor lo recalcula con
+  // orderTaxBreakdown en cada upsert, regla 8); el cliente nunca lo calcula.
   listWithOpenOrders: deviceProcedure
     .input(listTablesWithOrdersSchema)
     .query(async ({ ctx, input }) => {
+      // Pagos completados de la comanda como subconsulta escalar. Referencia a mano a
+      // "orders"."id": hay joins, pero así es explícito y no depende del prefijo automático.
+      const paidCents =
+        sql<number>`(SELECT COALESCE(SUM(${payments.amountCents}), 0) FROM ${payments} WHERE ${and(
+          eq(payments.businessId, ctx.businessId),
+          eq(payments.orderId, sql.raw('"orders"."id"')),
+          eq(payments.status, 'completed'),
+        )})`.mapWith(Number);
+
       const rows = await ctx.db
         .select({
           id: tables.id,
@@ -147,6 +160,11 @@ const tablesRouter = router({
           shape: tables.shape,
           seats: tables.seats,
           openOrderId: orders.id,
+          openedAt: orders.openedAt,
+          billRequestedAt: orders.billRequestedAt,
+          totalCents: orders.totalCents,
+          employeeName: employees.name,
+          paidCents,
         })
         .from(tables)
         .leftJoin(
@@ -157,6 +175,10 @@ const tablesRouter = router({
             eq(orders.businessId, ctx.businessId),
           ),
         )
+        .leftJoin(
+          employees,
+          and(eq(employees.id, orders.employeeId), eq(employees.businessId, ctx.businessId)),
+        )
         .where(
           and(
             eq(tables.businessId, ctx.businessId),
@@ -164,7 +186,28 @@ const tablesRouter = router({
             input.zoneId !== undefined ? eq(tables.zoneId, input.zoneId) : undefined,
           ),
         );
-      return rows;
+
+      // Mesa libre => todos los datos de comanda a null. Ocupada => pendiente calculado aquí.
+      return rows.map(({ paidCents: paid, ...row }) => {
+        if (row.openOrderId === null) {
+          return {
+            ...row,
+            openedAt: null,
+            billRequestedAt: null,
+            totalCents: null,
+            paidCents: null,
+            pendingCents: null,
+            employeeName: null,
+          };
+        }
+        const total = row.totalCents ?? 0;
+        return {
+          ...row,
+          totalCents: total,
+          paidCents: paid,
+          pendingCents: pendingCents(total, paid),
+        };
+      });
     }),
 
   getById: businessProcedure.input(idOnlySchema).query(async ({ ctx, input }) => {
