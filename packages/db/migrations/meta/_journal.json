@@ -36,6 +36,13 @@
       "when": 1784205532226,
       "tag": "0004_faulty_doctor_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794255787721,
+      "tag": "0005_cash_sessions_open_device_unique",
+      "breakpoints": true
     }
   ]
 }
