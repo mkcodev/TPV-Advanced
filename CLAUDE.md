@@ -83,7 +83,7 @@ Primero web, empaquetar escritorio después.
 | Helper (withBusinessContext, tenant) | `packages/db/src/tenant.ts` |
 
 ### Lógica pura (`packages/core/src/`)
-`money.ts` · `order-totals.ts` (`orderTaxBreakdown`) · `payments.ts` · `cash-session.ts` · `auth/` (lockout, rate-limit, pairing-code). Cada módulo con su `*.test.ts` al lado.
+`money.ts` · `order-totals.ts` (`orderTaxBreakdown`) · `payments.ts` · `cash-session.ts` (esperado, descuadre, `canSeeExpectedCash`) · `auth/` (lockout, rate-limit, pairing-code). Cada módulo con su `*.test.ts` al lado.
 
 ### Validadores Zod (`packages/validators/src/index.ts`)
 Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `createTableSchema`, `updateTableSchema`, `createZoneSchema`, `updateZoneSchema`, `createProductSchema`, `updateProductSchema`, `createCategorySchema`, etc.
@@ -96,7 +96,8 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts` |
 | Comandas (upsert, pay, getByTable…) | `orders.ts` | — |
 | Auth (device pairing, PIN login) | `auth.ts` | — |
-| Caja (apertura/cierre, movimientos, informe Z) | `cash-session.ts` | — |
+| Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol |
+| Ajustes del negocio (`blind_cash_close`) | `business.ts` | `managerProcedure`; ver `docs/PASO-0.5.md` |
 | Me (perfil del usuario admin) | `me.ts` | — |
 
 **Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`
@@ -129,6 +130,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Shell (sidebar, nav) | `shell/app-sidebar.tsx`, `shell/nav-group.tsx`, `shell/user-menu.tsx` |
 | Catálogo | `catalog/category-form-dialog.tsx` ⭐, `catalog/product-form-dialog.tsx`, `catalog/categories-panel.tsx`, `catalog/products-panel.tsx` |
 | Sala y mesas | `floor/zones-panel.tsx`, `floor/floor-canvas.tsx`, `floor/table-editor-item.tsx`, `floor/zone-form-dialog.tsx`, `floor/table-form-dialog.tsx` |
+| Ajustes | `settings/blind-cash-close-setting.tsx` |
 
 ### Rutas Next.js (`apps/web/src/app/`)
 | Ruta | Archivo |
@@ -139,6 +141,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | `/admin` — dashboard | `(admin)/admin/(shell)/page.tsx` |
 | `/admin/catalog` | `(admin)/admin/(shell)/catalog/page.tsx` |
 | `/admin/floor` | `(admin)/admin/(shell)/floor/page.tsx` |
+| `/admin/settings` — ajustes (cierre ciego) | `(admin)/admin/(shell)/settings/page.tsx` |
 | `/api/trpc/[trpc]` — handler tRPC | `api/trpc/[trpc]/route.ts` |
 
 ### Config / infra
