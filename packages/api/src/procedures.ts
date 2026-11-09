@@ -15,7 +15,8 @@ export const deviceProcedure = businessProcedure.use(({ ctx, next }) => {
 
 // Reads employee role from DB — never trust role from JWT claims.
 export async function getEmployeeRole(
-  db: Database,
+  // Solo necesita select: así acepta tanto el cliente como una transacción abierta.
+  db: Pick<Database, 'select'>,
   employeeId: string,
   businessId: string,
 ): Promise<EmployeeRole | null> {

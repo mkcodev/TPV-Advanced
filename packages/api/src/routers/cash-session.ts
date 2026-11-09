@@ -8,7 +8,6 @@
 import { canSeeExpectedCash, computeDifferenceCents, computeExpectedCashCents } from '@tpv/core';
 import {
   type BusinessTransaction,
-  type Database,
   businesses,
   cashMovements,
   cashSessions,
@@ -81,16 +80,16 @@ async function loadExpectedCashCents(
 // Fail-closed: negocio no encontrado => ciego; sin empleado => rol null => no lo ve.
 async function canCallerSeeExpected(
   tx: BusinessTransaction,
-  ctx: { db: Database; businessId: string; employeeId: string | null },
+  ctx: { businessId: string; employeeId: string | null },
 ): Promise<boolean> {
   const [biz] = await tx
     .select({ blindCashClose: businesses.blindCashClose })
     .from(businesses)
     .where(eq(businesses.id, ctx.businessId))
     .limit(1);
-  const role = ctx.employeeId
-    ? await getEmployeeRole(ctx.db, ctx.employeeId, ctx.businessId)
-    : null;
+  // El rol se lee en la misma transacción: pedir otra conexión del pool con una transacción
+  // abierta cuesta una conexión nueva si no hay libres, y se bloquea si el pool está agotado.
+  const role = ctx.employeeId ? await getEmployeeRole(tx, ctx.employeeId, ctx.businessId) : null;
   return canSeeExpectedCash(role, biz?.blindCashClose ?? true);
 }
 
