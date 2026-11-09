@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "bill_requested_at" timestamp with time zone;
