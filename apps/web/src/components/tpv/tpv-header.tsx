@@ -18,7 +18,9 @@ export function TpvHeader() {
 
   // El nombre del negocio casi nunca cambia: se pide una vez por sesión. Mientras carga,
   // texto vacío (mejor que parpadear con un nombre falso).
-  const { data: business } = trpc.business.getName.useQuery(undefined, { staleTime: Infinity });
+  const { data: business } = trpc.business.getName.useQuery(undefined, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   const isTableOrder = type === 'dine_in';
   const contextLabel =
