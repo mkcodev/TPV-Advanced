@@ -1,6 +1,7 @@
 'use client';
 
 import { useEmployeeStore } from '@/lib/stores/use-employee-store';
+import { canAccessAdmin } from '@/lib/tpv/employee-roles';
 import {
   Avatar,
   AvatarFallback,
@@ -11,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 
 export function TpvEmployeeChip() {
   const t = useTranslations('tpv.auth');
@@ -59,7 +61,14 @@ export function TpvEmployeeChip() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={lock}>{t('chip.change')}</DropdownMenuItem>
+        {canAccessAdmin(employee.role) && (
+          <DropdownMenuItem asChild className="min-h-[44px] cursor-pointer">
+            <Link href="/admin">{t('chip.openAdmin')}</Link>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onClick={lock} className="min-h-[44px] cursor-pointer">
+          {t('chip.change')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

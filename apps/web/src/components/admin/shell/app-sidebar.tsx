@@ -100,7 +100,7 @@ export function AppSidebar({ memberships, currentBusinessId, role, currentUser }
             </SidebarMenu>
           </>
         )}
-        <UserMenu email={currentUser.email} />
+        <UserMenu email={currentUser.email} canOpenTpv={canSeeItem(role, 'admin')} />
       </SidebarFooter>
 
       <SidebarRail />

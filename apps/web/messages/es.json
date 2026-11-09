@@ -52,6 +52,7 @@
       "soonBadge": "Pronto",
       "toggle": "Alternar menú",
       "userMenu": "Menú de usuario",
+      "openTpv": "Abrir TPV",
       "logout": "Cerrar sesión",
       "switchBusiness": "Cambiar negocio"
     },
@@ -468,6 +469,7 @@
           "worker": "Empleado"
         },
         "change": "Cambiar empleado",
+        "openAdmin": "Panel de administración",
         "logout": "Cerrar sesión"
       }
     },
