@@ -82,6 +82,9 @@ Primero web, empaquetar escritorio después.
 | Inventario | `packages/db/src/schema/inventory.ts` |
 | Helper (withBusinessContext, tenant) | `packages/db/src/tenant.ts` |
 
+### Lógica pura (`packages/core/src/`)
+`money.ts` · `order-totals.ts` (`orderTaxBreakdown`) · `payments.ts` · `cash-session.ts` · `auth/` (lockout, rate-limit, pairing-code). Cada módulo con su `*.test.ts` al lado.
+
 ### Validadores Zod (`packages/validators/src/index.ts`)
 Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `createTableSchema`, `updateTableSchema`, `createZoneSchema`, `updateZoneSchema`, `createProductSchema`, `updateProductSchema`, `createCategorySchema`, etc.
 
@@ -93,6 +96,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts` |
 | Comandas (upsert, pay, getByTable…) | `orders.ts` | — |
 | Auth (device pairing, PIN login) | `auth.ts` | — |
+| Caja (apertura/cierre, movimientos, informe Z) | `cash-session.ts` | — |
 | Me (perfil del usuario admin) | `me.ts` | — |
 
 **Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`
@@ -114,6 +118,8 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Comanda | `tpv-order-lines.tsx`, `tpv-order-line.tsx`, `tpv-order-totals.tsx`, `tpv-clear-button.tsx` |
 | Guardar / hidratación | `tpv-save-order-button.tsx`, `tpv-order-hydrator.tsx` |
 | Cobro | `payment/payment-dialog.tsx`, `payment/bill-button.tsx`, `payment/cash-panel.tsx` |
+| Caja / informe Z | `cash/open-cash-session-dialog.tsx`, `cash/close-cash-session-dialog.tsx`, `cash/cash-movement-dialog.tsx`, `cash/z-report.tsx`, `cash/tpv-cash-chip.tsx` |
+| Impresión (ticket simplificado, comanda cocina) | `print/invoice-ticket.tsx`, `print/kitchen-order.tsx`, `tpv-send-to-kitchen-button.tsx` |
 | Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx` |
 | Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx`, `floor/tpv-floor-counter-button.tsx` |
 
@@ -129,6 +135,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 |---|---|
 | `/tpv` — plano de sala | `tpv/page.tsx` |
 | `/tpv/order` — pantalla de venta | `tpv/order/page.tsx` |
+| `/tpv/cash/[sessionId]/z-report` — informe Z | `tpv/cash/[sessionId]/z-report/` |
 | `/admin` — dashboard | `(admin)/admin/(shell)/page.tsx` |
 | `/admin/catalog` | `(admin)/admin/(shell)/catalog/page.tsx` |
 | `/admin/floor` | `(admin)/admin/(shell)/floor/page.tsx` |
@@ -158,6 +165,10 @@ pnpm lint              # comprobación de Biome
 pnpm typecheck         # comprobación de tipos
 pnpm db:generate       # Drizzle: generar migración desde el esquema
 pnpm db:migrate        # aplicar migraciones (entorno del DATABASE_URL en .env)
+pnpm db:seed           # datos de ejemplo
+pnpm format            # Biome: formatear y escribir
+pnpm --filter @tpv/api test -- catalog-router   # un solo archivo de test (vitest run <patrón>)
+pnpm --filter @tpv/db test:integration          # tests RLS (requiere DB real, ver rls-isolation)
 ```
 
 ---
@@ -177,7 +188,7 @@ pnpm db:migrate        # aplicar migraciones (entorno del DATABASE_URL en .env)
 
 ## 7. Principios de arquitectura
 
-- **Multi-negocio:** `organizations` → `businesses`. Cada fila de dominio lleva `business_id` derivado del contexto de auth. **Doble defensa:** (1) middleware `businessProcedure` en tRPC; (2) RLS con `auth.jwt()` en Supabase. Ver `docs/DATABASE-SCHEMA.md` "Notas de implementación".
+- **Multi-negocio:** `organizations` → `businesses`. Cada fila de dominio lleva `business_id` derivado del contexto de auth. **Doble defensa (objetivo):** (1) middleware `businessProcedure` en tRPC; (2) RLS con `request_business_id()` en Supabase, fijado vía `withBusinessContext` (`packages/db/src/tenant.ts`). **Estado actual:** la conexión Drizzle usa el rol `postgres` (owner), que **salta RLS** — hoy la única defensa real es `businessProcedure`. No asumas que RLS protege nada hasta migrar a un rol runtime de mínimo privilegio. Ver `docs/DATABASE-SCHEMA.md` "Notas de implementación".
 - **Servidor autoritativo de totales:** el cliente pinta el estado optimista; el servidor siempre recalcula con `@tpv/core.orderTaxBreakdown` antes de persistir. Los totales enviados por el cliente son ignorados.
 - **Emisor legal único por negocio:** solo el nodo emisor designado (caja Electron o backend cloud) escribe en `billing_records`. Evita el fork de la cadena de hash. Ver `docs/DATABASE-SCHEMA.md` módulo 6.
 - **Offline = operaciones append-only:** la sincronización se hace por replay idempotente de operaciones (añadir línea, anular, pagar), no por LWW. Los totales se recalculan en servidor tras el replay. Ver `docs/DATABASE-SCHEMA.md` "Offline-first".
