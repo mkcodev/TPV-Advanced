@@ -5,10 +5,24 @@ import { businesses, withBusinessContext } from '@tpv/db';
 import { updateBusinessSettingsSchema } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
-import { managerProcedure } from '../procedures';
+import { deviceProcedure, managerProcedure } from '../procedures';
 import { router } from '../trpc';
 
 export const businessRouter = router({
+  // Nombre real del negocio para la cabecera del TPV. Sin input: el negocio sale del
+  // contexto del dispositivo emparejado, así que no hay forma de pedir el de otro.
+  getName: deviceProcedure.query(async ({ ctx }) => {
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [row] = await tx
+        .select({ name: businesses.name })
+        .from(businesses)
+        .where(eq(businesses.id, ctx.businessId))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Business not found' });
+      return row;
+    });
+  }),
+
   getSettings: managerProcedure.query(async ({ ctx }) => {
     return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
       const [row] = await tx

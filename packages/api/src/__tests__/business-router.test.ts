@@ -142,6 +142,45 @@ describe('business.updateSettings', () => {
   });
 });
 
+// ── getName ──────────────────────────────────────────────────────────────────
+
+describe('business.getName', () => {
+  it('devuelve el nombre del negocio del contexto', async () => {
+    const { db } = queuedDb([[{ name: 'Bar Pepe' }]]);
+    const caller = createCaller(deviceCtx(db));
+    expect(await caller.business.getName()).toEqual({ name: 'Bar Pepe' });
+  });
+
+  it('el WHERE usa el business_id del contexto (BIZ_A), nunca otro', async () => {
+    const { db, calls } = queuedDb([[{ name: 'Bar Pepe' }]]);
+    const caller = createCaller(deviceCtx(db));
+    await caller.business.getName();
+
+    const where = calls.find((c) => c.method === 'where')?.args[0];
+    const params = whereParams(where);
+    expect(params).toContain(BIZ_A);
+    expect(params).not.toContain(BIZ_B);
+  });
+
+  it('negocio no encontrado → NOT_FOUND', async () => {
+    const { db } = queuedDb([[]]);
+    const caller = createCaller(deviceCtx(db));
+    await expect(caller.business.getName()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('un worker también puede leerlo (solo exige dispositivo)', async () => {
+    const { db } = queuedDb([[{ name: 'Bar Pepe' }]]);
+    const caller = createCaller(deviceCtx(db));
+    await expect(caller.business.getName()).resolves.toEqual({ name: 'Bar Pepe' });
+  });
+
+  it('el panel admin (no dispositivo) recibe FORBIDDEN', async () => {
+    const { db } = queuedDb([[{ name: 'Bar Pepe' }]]);
+    const caller = createCaller(adminCtx(db));
+    await expect(caller.business.getName()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
 // ── getSettings ──────────────────────────────────────────────────────────────
 
 describe('business.getSettings', () => {
