@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { canSeeExpectedCash, computeDifferenceCents, computeExpectedCashCents } from './cash-session';
+import {
+  canSeeExpectedCash,
+  computeDifferenceCents,
+  computeExpectedCashCents,
+} from './cash-session';
 
 describe('computeExpectedCashCents', () => {
   it('fondo solo, sin ventas ni movimientos', () => {
