@@ -16,3 +16,5 @@ out
 coverage
 *.log
 .DS_Store
+# local Claude Code settings
+.claude/settings.local.json

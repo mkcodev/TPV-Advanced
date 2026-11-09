@@ -10,6 +10,15 @@
   },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
   "files": {
-    "ignore": ["node_modules", "dist", ".next", ".expo", "out", "migrations", "next-env.d.ts"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".next",
+      ".expo",
+      "out",
+      "migrations",
+      "next-env.d.ts",
+      ".claude/settings.local.json"
+    ]
   }
 }
