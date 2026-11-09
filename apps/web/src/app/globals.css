@@ -38,6 +38,7 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-overlay: hsl(var(--overlay));
 
   /* Sidebar — necesario en Tailwind v4: las utilidades bg-sidebar, text-sidebar-foreground,
      border-sidebar-border, etc. no existen hasta declararse aquí. */

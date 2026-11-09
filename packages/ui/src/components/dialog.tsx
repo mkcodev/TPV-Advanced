@@ -4,6 +4,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { useOverlayClassName } from '../lib/overlay-layer';
 
 /* Dialog — modal bloqueante. Usar con moderación en el TPV:
    preferir toast con "Deshacer" (5s) para acciones destructivas leves.
@@ -18,11 +19,7 @@ export const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn('fixed inset-0 z-[1200] bg-black/80', className)}
-    {...props}
-  />
+  <DialogPrimitive.Overlay ref={ref} className={useOverlayClassName(className)} {...props} />
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
@@ -35,7 +32,7 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-[1300] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]',
+        'fixed left-[50%] top-[50%] z-(--z-modal) grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]',
         'gap-4 border bg-background p-6 shadow-lg rounded-lg',
         className,
       )}

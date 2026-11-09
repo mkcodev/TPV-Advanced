@@ -1,5 +1,6 @@
 'use client';
 
+import { TpvCashChip } from '@/components/tpv/cash/tpv-cash-chip';
 import { TpvFloorCounterButton } from '@/components/tpv/floor/tpv-floor-counter-button';
 import { TpvFloorZoneTabs } from '@/components/tpv/floor/tpv-floor-zone-tabs';
 import { TpvEmployeeChip } from '@/components/tpv/tpv-employee-chip';
@@ -15,6 +16,7 @@ export default function TpvFloorPage() {
         <span className="font-semibold text-foreground">{t('title')}</span>
         <div className="flex items-center gap-3">
           <TpvSyncPill />
+          <TpvCashChip />
           <TpvEmployeeChip />
         </div>
       </header>

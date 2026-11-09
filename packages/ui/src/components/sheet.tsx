@@ -5,6 +5,7 @@ import { type VariantProps, cva } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { useOverlayClassName } from '../lib/overlay-layer';
 
 /* Sheet — panel lateral deslizante. Usa el primitivo Dialog de Radix.
    Variantes: top, bottom, left, right (default: right).
@@ -18,16 +19,12 @@ export const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    className={cn('fixed inset-0 z-[1200] bg-black/80', className)}
-    {...props}
-    ref={ref}
-  />
+  <DialogPrimitive.Overlay className={useOverlayClassName(className)} {...props} ref={ref} />
 ));
 SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-[1300] gap-4 bg-background p-6 shadow-lg transition-transform duration-300 ease-in-out',
+  'fixed z-(--z-modal) gap-4 bg-background p-6 shadow-lg transition-transform duration-300 ease-in-out',
   {
     variants: {
       side: {

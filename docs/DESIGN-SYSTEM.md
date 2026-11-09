@@ -161,7 +161,17 @@ Regla de oro: **si dudas entre dos valores, elige el de la escala más cercano; 
 
 **Z-index (escala fija):**
 `base 0` · `dropdown 1000` · `sticky 1100` · `overlay 1200` · `modal 1300` · `popover 1400` · `toast 1500`.
-Prohibido `z-[9999]` a mano.
+Prohibido `z-[9999]` a mano, y también `z-[1200]` y similares: cada valor de la escala es un token
+en `tokens.css` (`--z-dropdown`, `--z-sticky`, `--z-overlay`, `--z-modal`, `--z-popover`, `--z-toast`)
+y se usa como `z-(--z-overlay)`.
+
+**Overlay de diálogos** (`Dialog`, `AlertDialog`, `Sheet`):
+- Color `--overlay` (el color del texto al 40 % de opacidad) y desenfoque `--overlay-blur` (4px),
+  usados como `bg-overlay` y `backdrop-blur-(--overlay-blur)`. Nada de `bg-black/80` ni valores a mano.
+- Diálogos anidados (p. ej. "Abrir caja" desde el cobro): solo oscurece y desenfoca el overlay más
+  antiguo. Los siguientes son transparentes para no sumar oscurecimiento, pero siguen bloqueando
+  los clics fuera del diálogo interior. Lo resuelve `useOverlayClassName` en
+  `packages/ui/src/lib/overlay-layer.ts`, así que los tres componentes se comportan igual.
 
 ---
 

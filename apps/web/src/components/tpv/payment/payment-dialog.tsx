@@ -17,7 +17,9 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
+import { OpenCashSessionDialog } from '../cash/open-cash-session-dialog';
 import { CashPanel } from './cash-panel';
+import { shouldPromptOpenCash } from './cash-session-guard';
 import { type PaymentMethod, PaymentMethodTabs } from './payment-method-tabs';
 
 // Línea de pago local (acumulación para pago mixto).
@@ -69,6 +71,18 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [cashReceivedCents, setCashReceivedCents] = useState<number | null>(null);
 
+  // Caja: el efectivo exige caja abierta. Se avisa dentro del diálogo, con acceso directo
+  // a abrirla, y el diálogo conserva los pagos ya añadidos.
+  const utils = trpc.useUtils();
+  const { data: cashSession } = trpc.cashSession.getCurrent.useQuery(undefined, {
+    enabled: open,
+  });
+  const [showOpenCash, setShowOpenCash] = useState(false);
+  const promptOpenCash = shouldPromptOpenCash(
+    [method, ...pendingPayments.map((p) => p.method)],
+    cashSession,
+  );
+
   const paidSoFar = pendingPayments.reduce((s, p) => s + p.amountCents, 0);
   const remainingCents = totalCents - paidSoFar;
 
@@ -116,7 +130,9 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
     },
     onError: (err) => {
       if (err.data?.code === 'PRECONDITION_FAILED') {
-        toast.error(tCash('errors.noOpenSessionCash'));
+        // El servidor dice que no hay caja abierta (p. ej. se cerró desde otra pestaña):
+        // refrescamos el estado y el aviso con el botón "Abrir caja" aparece en el diálogo.
+        void utils.cashSession.getCurrent.invalidate();
       } else {
         toast.error(err.message || t('error'));
       }
@@ -178,110 +194,136 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md gap-0 p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle>
-            {savedOrderNumber !== null ? t('title', { number: savedOrderNumber }) : t('confirm')}
-          </DialogTitle>
-          <div className="flex items-baseline gap-2 pt-1">
-            <span className="text-sm text-muted-foreground">{t('totalDue')}</span>
-            <span className="font-mono text-2xl font-bold tabular-nums text-foreground">
-              {formatCents(totalCents)}
-            </span>
-          </div>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md gap-0 p-0">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle>
+              {savedOrderNumber !== null ? t('title', { number: savedOrderNumber }) : t('confirm')}
+            </DialogTitle>
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-sm text-muted-foreground">{t('totalDue')}</span>
+              <span className="font-mono text-2xl font-bold tabular-nums text-foreground">
+                {formatCents(totalCents)}
+              </span>
+            </div>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-4 px-6 py-4">
-          {/* Pagos ya acumulados (modo mixto) */}
-          {pendingPayments.length > 0 && (
-            <div className="flex flex-col gap-1">
-              {pendingPayments.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
-                >
-                  <span className="text-muted-foreground">{methodLabel[p.method]}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="tabular-nums font-medium">{formatCents(p.amountCents)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePayment(p.id)}
-                      aria-label={t('removePayment')}
-                      className="text-muted-foreground transition-colors hover:text-destructive"
-                    >
-                      <Trash2 size={14} strokeWidth={2} />
-                    </button>
+          <div className="flex flex-col gap-4 px-6 py-4">
+            {/* Pagos ya acumulados (modo mixto) */}
+            {pendingPayments.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {pendingPayments.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm"
+                  >
+                    <span className="text-muted-foreground">{methodLabel[p.method]}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums font-medium">{formatCents(p.amountCents)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePayment(p.id)}
+                        aria-label={t('removePayment')}
+                        className="text-muted-foreground transition-colors hover:text-destructive"
+                      >
+                        <Trash2 size={14} strokeWidth={2} />
+                      </button>
+                    </div>
                   </div>
+                ))}
+                <Separator className="mt-1" />
+                <div className="flex justify-between text-sm font-medium">
+                  <span className="text-muted-foreground">{t('remaining')}</span>
+                  <span className="tabular-nums text-foreground">
+                    {formatCents(remainingCents)}
+                  </span>
                 </div>
-              ))}
-              <Separator className="mt-1" />
-              <div className="flex justify-between text-sm font-medium">
-                <span className="text-muted-foreground">{t('remaining')}</span>
-                <span className="tabular-nums text-foreground">{formatCents(remainingCents)}</span>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Selector de método */}
-          <PaymentMethodTabs
-            selected={method}
-            onChange={(m) => {
-              setMethod(m);
-              setCashReceivedCents(null);
-            }}
-          />
+            {/* Efectivo sin caja abierta: aviso con acceso directo a abrirla */}
+            {promptOpenCash && (
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-3 rounded-lg border border-warning bg-warning/10 px-3 py-2"
+              >
+                <p className="text-sm text-foreground">{tCash('errors.noOpenSessionCash')}</p>
+                <Button size="lg" variant="secondary" onClick={() => setShowOpenCash(true)}>
+                  {tCash('openAction')}
+                </Button>
+              </div>
+            )}
 
-          {/* Panel específico por método */}
-          {method === 'cash' ? (
-            <CashPanel
-              amountCents={currentAmountCents}
-              cashReceivedCents={cashReceivedCents}
-              onChange={setCashReceivedCents}
+            {/* Selector de método */}
+            <PaymentMethodTabs
+              selected={method}
+              onChange={(m) => {
+                setMethod(m);
+                setCashReceivedCents(null);
+              }}
             />
-          ) : (
-            <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-center text-sm text-muted-foreground">
-              {formatCents(currentAmountCents)} · {methodLabel[method]}
-            </div>
-          )}
-        </div>
 
-        <DialogFooter className="flex-col gap-2 border-t border-border px-6 py-4 sm:flex-col">
-          {/* Botón "Añadir método" — pagar parte del total con un método y el resto con otro */}
-          {canConfirm && remainingCents > currentAmountCents && (
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              onClick={handleAddPayment}
-              disabled={isPending}
-            >
-              {t('addMethod')}
-            </Button>
-          )}
-
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="lg"
-              className="flex-1"
-              onClick={handleClose}
-              disabled={isPending}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="success"
-              size="xl"
-              className="flex-1"
-              disabled={!canConfirm || isPending || !orderId}
-              onClick={handleConfirm}
-            >
-              {isPending ? '…' : t('confirm')}
-            </Button>
+            {/* Panel específico por método */}
+            {method === 'cash' ? (
+              <CashPanel
+                amountCents={currentAmountCents}
+                cashReceivedCents={cashReceivedCents}
+                onChange={setCashReceivedCents}
+              />
+            ) : (
+              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-center text-sm text-muted-foreground">
+                {formatCents(currentAmountCents)} · {methodLabel[method]}
+              </div>
+            )}
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+          <DialogFooter className="flex-col gap-2 border-t border-border px-6 py-4 sm:flex-col">
+            {/* Botón "Añadir método" — pagar parte del total con un método y el resto con otro */}
+            {canConfirm && remainingCents > currentAmountCents && (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                onClick={handleAddPayment}
+                disabled={isPending}
+              >
+                {t('addMethod')}
+              </Button>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="lg"
+                className="flex-1"
+                onClick={handleClose}
+                disabled={isPending}
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                variant="success"
+                size="xl"
+                className="flex-1"
+                disabled={!canConfirm || isPending || !orderId}
+                onClick={handleConfirm}
+              >
+                {isPending ? '…' : t('confirm')}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <OpenCashSessionDialog
+        open={showOpenCash}
+        onOpenChange={setShowOpenCash}
+        onSuccess={() => {
+          setShowOpenCash(false);
+          void utils.cashSession.getCurrent.invalidate();
+        }}
+      />
+    </>
   );
 }

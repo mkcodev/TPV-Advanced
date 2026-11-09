@@ -59,6 +59,20 @@
   /* Radio base (esquinas suaves) */
   --radius: 0.5rem; /* 8px */
 
+  /* Overlay de diálogos: el color del texto al 40 % de opacidad más un desenfoque suave.
+     Solo el overlay más antiguo lo aplica; los anidados son transparentes
+     (ver packages/ui/src/lib/overlay-layer.ts). */
+  --overlay: 222 47% 11% / 0.4;
+  --overlay-blur: 4px;
+
+  /* Capas (z-index) — escala fija de docs/DESIGN-SYSTEM.md §4. Prohibido z-[nnnn] a mano. */
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-overlay: 1200;
+  --z-modal: 1300;
+  --z-popover: 1400;
+  --z-toast: 1500;
+
   /* ── Sidebar ─────────────────────────────────────────────────────────────
    * Colores derivados de tokens existentes — mantienen la paleta slate.
    * Tamaños son nuevos (no tienen equivalente en la escala de tokens).

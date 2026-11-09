@@ -13,11 +13,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@tpv/ui';
-import { ChevronsUpDown, LogOut, Settings } from 'lucide-react';
+import { ChevronsUpDown, LogOut, Monitor, Settings } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-type UserMenuProps = { email: string };
+// canOpenTpv: solo owner/admin ven el enlace; el TPV además necesita un dispositivo emparejado.
+type UserMenuProps = { email: string; canOpenTpv: boolean };
 
 function getInitials(email: string): string {
   const name = email.split('@')[0] ?? email;
@@ -28,7 +30,7 @@ function getInitials(email: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-export function UserMenu({ email }: UserMenuProps) {
+export function UserMenu({ email, canOpenTpv }: UserMenuProps) {
   const t = useTranslations('admin.nav');
   const router = useRouter();
 
@@ -83,6 +85,17 @@ export function UserMenu({ email }: UserMenuProps) {
               <Settings className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
               {t('settings')}
             </DropdownMenuItem>
+            {canOpenTpv && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="gap-2 cursor-pointer">
+                  <Link href="/tpv">
+                    <Monitor className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+                    {t('openTpv')}
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 cursor-pointer" onClick={handleLogout}>
               <LogOut className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />

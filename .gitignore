@@ -18,3 +18,5 @@ coverage
 .DS_Store
 # local Claude Code settings
 .claude/settings.local.json
+# local design-hook cache
+.impeccable

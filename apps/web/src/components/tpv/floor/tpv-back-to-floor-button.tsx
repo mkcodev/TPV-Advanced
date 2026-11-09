@@ -41,11 +41,10 @@ export function TpvBackToFloorButton() {
         // best-effort: failure is silently ignored, navigation proceeds anyway
       });
     }
+    // Barra: no se guarda nada al salir. Sus líneas quedan en la sesión local del store
+    // (se aparca al abrir una mesa y se recupera al volver a pulsar "Barra").
     router.push('/tpv');
   }
-
-  // Only show if navigating from a table (not counter) — counter has no floor to return to
-  if (type === 'counter') return null;
 
   return (
     <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1.5">
