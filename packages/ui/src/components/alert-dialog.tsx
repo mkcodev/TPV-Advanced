@@ -3,6 +3,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { useOverlayClassName } from '../lib/overlay-layer';
 import { buttonVariants } from './button';
 
 /* AlertDialog — para confirmaciones irreversibles (anular comanda, cerrar caja).
@@ -16,11 +17,7 @@ export const AlertDialogOverlay = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <AlertDialogPrimitive.Overlay
-    ref={ref}
-    className={cn('fixed inset-0 z-[1200] bg-black/80', className)}
-    {...props}
-  />
+  <AlertDialogPrimitive.Overlay ref={ref} className={useOverlayClassName(className)} {...props} />
 ));
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 
@@ -33,7 +30,7 @@ export const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-[1300] grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]',
+        'fixed left-[50%] top-[50%] z-(--z-modal) grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%]',
         'gap-4 border bg-background p-6 shadow-lg rounded-lg',
         className,
       )}
