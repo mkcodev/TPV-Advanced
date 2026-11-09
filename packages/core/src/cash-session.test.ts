@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeDifferenceCents, computeExpectedCashCents } from './cash-session';
+import { canSeeExpectedCash, computeDifferenceCents, computeExpectedCashCents } from './cash-session';
 
 describe('computeExpectedCashCents', () => {
   it('fondo solo, sin ventas ni movimientos', () => {
@@ -45,6 +45,41 @@ describe('computeExpectedCashCents', () => {
     // Añadir cobros card/bizum al cálculo no debe cambiar el resultado
     // (esto se verifica mostrando que cashPayments solo incluye cash).
     expect(base).toBe(8000);
+  });
+});
+
+describe('computeExpectedCashCents — suma en céntimos enteros', () => {
+  it('10000 + 2550 + 505 − 1001 = 12054, sin errores de coma flotante', () => {
+    const result = computeExpectedCashCents({
+      openingAmountCents: 10000,
+      cashPaymentsCents: 2550,
+      payInCents: 505,
+      payOutCents: 1001,
+    });
+    expect(result).toBe(12054);
+    expect(Number.isInteger(result)).toBe(true);
+  });
+});
+
+describe('canSeeExpectedCash — matriz rol × ajuste', () => {
+  it.each([
+    ['worker', true, false],
+    ['worker', false, true],
+    ['manager', true, true],
+    ['manager', false, true],
+    ['admin', true, true],
+    ['admin', false, true],
+  ] as const)('%s con cierre ciego=%s → %s', (role, blind, expected) => {
+    expect(canSeeExpectedCash(role, blind)).toBe(expected);
+  });
+
+  it('rol null/undefined es fail-closed con cierre ciego', () => {
+    expect(canSeeExpectedCash(null, true)).toBe(false);
+    expect(canSeeExpectedCash(undefined, true)).toBe(false);
+  });
+
+  it('sin cierre ciego todos lo ven, incluso rol desconocido', () => {
+    expect(canSeeExpectedCash(null, false)).toBe(true);
   });
 });
 
