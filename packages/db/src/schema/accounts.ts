@@ -104,6 +104,9 @@ export const businesses = pgTable(
     currency: text('currency').default('EUR').notNull(),
     verifactuMode: text('verifactu_mode').$type<VerifactuMode>().default('disabled').notNull(),
     invoiceSeries: text('invoice_series'), // incluye el año (ej. 'A2027'); rotación anual
+    // Cierre ciego: si es true, un worker no ve el efectivo esperado de la caja.
+    // Default true = los negocios existentes quedan protegidos (anti-fraude).
+    blindCashClose: boolean('blind_cash_close').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     ...timestamps,
   },

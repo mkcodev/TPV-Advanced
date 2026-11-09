@@ -43,6 +43,13 @@
       "when": 1794255787721,
       "tag": "0005_cash_sessions_open_device_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794255803462,
+      "tag": "0006_blind_cash_close",
+      "breakpoints": true
     }
   ]
 }

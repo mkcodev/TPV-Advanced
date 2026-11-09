@@ -1,0 +1,1 @@
+ALTER TABLE "businesses" ADD COLUMN "blind_cash_close" boolean DEFAULT true NOT NULL;
