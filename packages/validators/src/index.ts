@@ -346,3 +346,8 @@ export type AddCashMovementInput = z.infer<typeof addCashMovementSchema>;
 
 export const getZReportSchema = z.object({ sessionId: z.string().uuid() }).strict();
 export type GetZReportInput = z.infer<typeof getZReportSchema>;
+
+// Ajustes del negocio editables por manager/admin. Sin businessId: sale del contexto de auth.
+// .strict() hace que un campo extra (p. ej. businessId) se rechace en vez de ignorarse.
+export const updateBusinessSettingsSchema = z.object({ blindCashClose: z.boolean() }).strict();
+export type UpdateBusinessSettingsInput = z.infer<typeof updateBusinessSettingsSchema>;

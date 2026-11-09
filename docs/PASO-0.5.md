@@ -19,7 +19,10 @@ Etiqueta de los issues: `paso-0.5`. Las mejoras que quedan fuera (editor de mesa
 - "Pedir cuenta" fija `bill_requested_at` en una comanda abierta. Es idempotente.
 - Añadir líneas a una comanda con `bill_requested_at` lo pone otra vez a `NULL`: la mesa vuelve a "ocupada".
 - Al cobrar la comanda del todo, la comanda pasa a `paid` y la mesa queda libre.
-- Ambas reglas llevan test.
+- Un pago parcial no toca `bill_requested_at`: la comanda sigue abierta y pendiente de cobro.
+- Quitar o anular líneas no lo resetea. Solo lo resetea añadir líneas o subir cantidades.
+- `requestBill` en una comanda sin líneas devuelve `PRECONDITION_FAILED`.
+- Todas estas reglas llevan test.
 - `tables.status` es una caché que nadie escribe: el plano deriva el estado de la comanda abierta, no de ese campo.
 
 ### Límites de D1
@@ -54,28 +57,44 @@ Tests: unitario de `canAccessAdmin`. Para el #9, el flujo "sin caja → abrir �
 
 ## PR-C — Cierre ciego y efectivo esperado
 
-Cierra #14 y #8. Esquema de BD: sí. Riesgo: alto (dinero, permisos y migración).
+Cierra #14, #8 y #22. Esquema de BD: sí. Riesgo: alto (dinero, permisos y migración).
 
 Hoy el interruptor de cierre ciego es solo cosmético: `cashSession.close` siempre calcula y devuelve el esperado. Mostrar el efectivo esperado en el chip a cualquiera anularía el cierre ciego, por eso los dos issues van juntos.
 
-- Migración `0006`: `ALTER TABLE "businesses" ADD COLUMN "blind_cash_close" boolean DEFAULT true NOT NULL;`. Los negocios existentes quedan en ciego. Se revierte con `DROP COLUMN`. No hay BD de staging: se aplica a la única BD, y es aditiva.
-- Router nuevo `business`: `getSettings` y `updateSettings` (`managerProcedure`). El input no lleva `business_id`.
-- `cashSession.getExpected`: procedimiento nuevo que usa un helper compartido con `close` para las tres agregaciones y `computeExpectedCashCents`. Si el cierre es ciego y quien pregunta no es manager/admin, devuelve `null`.
+- Migración `0005` (arreglo, #22): el `.sql` del índice `cash_sessions_open_device_unique` no estaba en `meta/_journal.json` ni tenía snapshot, así que nunca se aplicó a la BD y el `CONFLICT` de `cashSession.open` no saltaba. Se regenera con drizzle-kit (solo el `CREATE UNIQUE INDEX … WHERE status = 'open'`). Se comprobó antes que no hay dos sesiones `open` por dispositivo.
+- Migración `0006`: `ALTER TABLE "businesses" ADD COLUMN "blind_cash_close" boolean DEFAULT true NOT NULL;`. Los negocios existentes quedan en ciego. Se revierte con `DROP COLUMN` (primero se revierte el código, después la columna). No hay BD de staging: se aplica a la única BD, y es aditiva. No se ejecuta `pnpm db:migrate` sin confirmar el contenido de los dos `.sql`.
+- Router nuevo `business`: `getSettings` y `updateSettings` (`managerProcedure`). El input no lleva `business_id` y es `.strict()`.
+- `@tpv/core.canSeeExpectedCash(role, blindCashClose)`: regla pura. Solo un worker con cierre ciego no ve el esperado; rol desconocido cuenta como worker.
+- `cashSession.getExpected`: procedimiento nuevo que usa un helper compartido con `close` para las tres agregaciones y `computeExpectedCashCents`. El rol sale de `ctx.employeeId` (PIN) leído en BD, nunca del input.
 - `procedures.ts`: se exporta `getEmployeeRole`.
+
+### Qué devuelve cada endpoint según rol y ajuste
+
+| Endpoint | worker + ciego | worker + no ciego | manager/admin (cualquier ajuste) |
+|---|---|---|---|
+| `getCurrent` | Sesión sin campos de cuadre | igual | igual |
+| `getExpected` | `{ visible: false, expectedAmountCents: null }` | `{ visible: true, expectedAmountCents: n }` | `{ visible: true, … }` |
+| `close` | `expectedAmountCents` y `differenceCents` a `null` (la BD guarda los reales) | valores reales | valores reales |
+| `getZReport`, sesión abierta (informe X) | `FORBIDDEN` | completo | completo |
+| `getZReport`, sesión cerrada (informe Z) | `expectedAmountCents` y `differenceCents` a `null` | completo | completo |
+
+Sin sesión abierta, `getExpected` devuelve `null`. Sin empleado con PIN, `UNAUTHORIZED`. El informe X se bloquea porque fondo, ventas por método y movimientos permiten deducir el esperado. Límite que no se cubre: un worker puede sumar a mano sus tickets en efectivo.
 - Chip de caja: cerrada muestra "Abrir caja"; abierta muestra el efectivo esperado si el rol lo permite. Se invalida la consulta tras cada cobro y movimiento. El color hardcodeado `bg-green-500` pasa a un token.
-- Diálogo de cierre: se quita el interruptor y se lee el ajuste del servidor.
+- Diálogo de cierre: se quita el interruptor. Si el rol puede verlo muestra el esperado; si no, solo la pista de cierre ciego y ningún aviso de descuadre tras cerrar.
 - Página `/admin/settings` mínima con un interruptor; la entrada de navegación pasa a `ready`.
 
-Tests: `getExpected` con worker/manager y ciego/no ciego, suma en céntimos con cobros en efectivo, entradas y salidas. `updateSettings`: un worker recibe `FORBIDDEN`, el campo llega al SET y el negocio sale del contexto. Los tests de `close` actuales siguen en verde.
+Tests: matriz rol × ajuste en `getExpected`, `close` y `getZReport`; `canSeeExpectedCash`; suma en céntimos con cobros en efectivo, entradas y salidas. `updateSettings`: un worker recibe `FORBIDDEN`, el campo llega al SET, el WHERE usa el negocio del contexto y un `businessId` en el input da `BAD_REQUEST`. Un `role` extra en el input de `close` se rechaza.
 
 ## PR-D — Plano informativo
 
-Cierra #6 y #7. Esquema de BD: sí. Riesgo: medio (consulta con joins en la pantalla más usada, solo lectura).
+Cierra #6, #7, #20 y #21. Esquema de BD: sí. Riesgo: medio (consulta con joins en la pantalla más usada, solo lectura).
 
 - Migración `0007`: `ALTER TABLE "orders" ADD COLUMN "bill_requested_at" timestamp with time zone;`. Nullable y sin default. Se revierte con `DROP COLUMN`.
 - `floor.tables.listWithOpenOrders` devuelve, por mesa ocupada: total, pagado, pendiente, hora de apertura, nombre del empleado y `bill_requested_at`. Todos los joins filtran por `business_id`.
 - El total sale de `orders.total_cents`, que el servidor ya recalcula con `orderTaxBreakdown` en cada `upsert` (regla 8). El pendiente es ese total menos los pagos completados, con una función pura `pendingCents` en `@tpv/core`.
 - `orders.requestBill`: mutación nueva y botón "Pedir cuenta" en la comanda. `upsert` pone `bill_requested_at` a `NULL` cuando añade líneas.
+- #20, nombre del negocio: la cabecera del TPV muestra `businesses.name` en vez del "Mi Negocio" fijo. Lo lee un procedimiento de `deviceProcedure` desde el contexto (sin `business_id` en el input) y se elimina la clave `tpv.header.businessName`. Test: devuelve el negocio del contexto y nunca el de otro.
+- #21, "Volver al plano": al volver, la mesa aparece ocupada al instante (actualización optimista de la caché de `floor.tables.listWithOpenOrders`). Al acabar el guardado se invalida la consulta; si falla, se revierte la mesa y se avisa por i18n sin perder las líneas del store local. Test de la lógica optimista y del revertido. Archivos: `floor/tpv-back-to-floor-button.tsx`, `floor/tpv-floor-view.tsx`.
 - Estados del plano: libre, ocupada y pendiente de cobro (token `--state-billing`). Además del color llevan texto.
 - El tiempo abierta se calcula en cliente solo para mostrarlo. El plano usa `refetchInterval` de 15 s y `refetchOnWindowFocus`.
 - Se sustituye el `text-[10px]` de `tpv-floor-table.tsx` por un tamaño de la escala.

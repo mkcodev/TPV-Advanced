@@ -79,6 +79,19 @@
         }
       }
     },
+    "settings": {
+      "title": "Configuración",
+      "cash": {
+        "title": "Caja",
+        "blindClose": {
+          "label": "Cierre ciego",
+          "description": "Los camareros cuentan el efectivo sin ver el importe esperado. Los encargados y administradores siempre lo ven.",
+          "saved": "Ajuste guardado",
+          "error": "No se pudo guardar el ajuste",
+          "loadError": "No se pudo cargar el ajuste"
+        }
+      }
+    },
     "floor": {
       "title": "Sala y mesas",
       "tabs": {
@@ -476,7 +489,8 @@
     "cash": {
       "status": {
         "closed": "Caja cerrada",
-        "open": "Caja abierta"
+        "open": "Caja abierta",
+        "openWithExpected": "Caja abierta · {amount}"
       },
       "openAction": "Abrir caja",
       "closeAction": "Cerrar caja",
@@ -496,8 +510,8 @@
         "title": "Cerrar caja",
         "description": "Cuenta el efectivo del cajón.",
         "counted": "Efectivo contado",
-        "blind": "Cierre ciego",
-        "blindHint": "Introduce el importe sin ver el esperado. Anti-fraude.",
+        "blindHint": "Cierre ciego: cuenta el efectivo sin ver el esperado.",
+        "expectedNow": "Esperado en caja: {amount}",
         "expected": "Esperado",
         "difference": "Descuadre",
         "confirm": "Cerrar caja",
@@ -541,6 +555,7 @@
         "total": "Total",
         "print": "Imprimir",
         "close": "Cerrar",
+        "forbidden": "Este informe no está disponible mientras el cierre ciego esté activo.",
         "loading": "Cargando informe…",
         "method": {
           "cash": "Efectivo",

@@ -126,7 +126,7 @@ export const FOOTER_NAV: NavItem[] = [
     labelKey: 'settings',
     href: '/admin/settings',
     icon: Settings,
-    status: 'soon',
+    status: 'ready',
     minRole: 'admin',
   },
 ];

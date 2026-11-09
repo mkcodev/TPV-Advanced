@@ -1,5 +1,6 @@
-// Tests del cashSession router: open, addMovement, close, getZReport.
+// Tests del cashSession router: open, addMovement, close, getExpected, getZReport.
 // Patrón queuedDb — mismo que orders-invoice.test.ts.
+// Cierre ciego: matriz rol × ajuste en getExpected, close y getZReport.
 
 import type { Database } from '@tpv/db';
 import { describe, expect, it } from 'vitest';
@@ -37,7 +38,10 @@ function queuedDb(responses: unknown[][]): { db: Database; calls: RecordedCall[]
   };
 
   const db = {
-    select: () => makeChain(),
+    select: (...args: unknown[]) => {
+      calls.push({ method: 'select', args });
+      return makeChain();
+    },
     insert: () => makeChain(),
     update: () => makeChain(),
     delete: () => makeChain(),
@@ -174,6 +178,8 @@ describe('cashSession.close', () => {
       [{ total: 500 }], // SUM cash_movements pay_in
       [{ total: 1000 }], // SUM cash_movements pay_out
       [{}], // UPDATE cashSessions
+      [{ blindCashClose: true }], // SELECT businesses.blind_cash_close
+      [{ role: 'manager' }], // SELECT employees.role → manager ve el esperado aunque sea ciego
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.cashSession.close({ countedAmountCents: 12010 });
@@ -199,12 +205,157 @@ describe('cashSession.close', () => {
       [{ total: 0 }],
       [{ total: 0 }],
       [{}],
+      [{ blindCashClose: true }],
+      [{ role: 'manager' }],
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.cashSession.close({ countedAmountCents: 10000 });
 
     expect(result.expectedAmountCents).toBe(10000);
     expect(result.differenceCents).toBe(0);
+  });
+});
+
+// ── close — cierre ciego (matriz rol × ajuste) ───────────────────────────────
+
+// fondo=10000, efectivo=2500, pay_in=500, pay_out=1000 → expected=12000; contado=12010 → diff=10
+function closeQueue(blind: boolean, role: string): unknown[][] {
+  return [
+    [{ id: SESSION_ID, openingAmountCents: 10000, status: 'open' }],
+    [{ total: 2500 }],
+    [{ total: 500 }],
+    [{ total: 1000 }],
+    [{}], // UPDATE
+    [{ blindCashClose: blind }],
+    [{ role }],
+  ];
+}
+
+describe('cashSession.close — cierre ciego', () => {
+  it.each([
+    ['worker', true, false],
+    ['worker', false, true],
+    ['manager', true, true],
+    ['manager', false, true],
+    ['admin', true, true],
+  ] as const)('rol %s, ciego=%s → respuesta con esperado: %s', async (role, blind, shown) => {
+    const { db, calls } = queuedDb(closeQueue(blind, role));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.close({ countedAmountCents: 12010 });
+
+    expect(result.expectedAmountCents).toBe(shown ? 12000 : null);
+    expect(result.differenceCents).toBe(shown ? 10 : null);
+
+    // La BD guarda SIEMPRE los valores reales, también cuando la respuesta se redacta.
+    const setRow = calls.find((c) => c.method === 'set')?.args[0] as Record<string, unknown>;
+    expect(setRow?.expectedAmountCents).toBe(12000);
+    expect(setRow?.differenceCents).toBe(10);
+  });
+
+  it('negocio no encontrado → ciego (fail-closed): worker no ve el esperado', async () => {
+    const queue = closeQueue(true, 'worker');
+    queue[5] = []; // SELECT businesses → vacío
+    const { db } = queuedDb(queue);
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.close({ countedAmountCents: 12010 });
+    expect(result.expectedAmountCents).toBeNull();
+  });
+
+  it('un role en el input se rechaza: el rol solo sale de ctx.employeeId + BD', async () => {
+    const { db } = queuedDb(closeQueue(true, 'worker'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    await expect(
+      caller.cashSession.close({
+        countedAmountCents: 12010,
+        role: 'manager',
+      } as unknown as { countedAmountCents: number }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+// ── getExpected ──────────────────────────────────────────────────────────────
+
+// Cola de getExpected: sesión → ajuste del negocio → rol → (si visible) 3 SUM.
+function expectedQueue(blind: boolean, role: string): unknown[][] {
+  return [
+    [{ id: SESSION_ID, openingAmountCents: 10000 }],
+    [{ blindCashClose: blind }],
+    [{ role }],
+    [{ total: 2500 }],
+    [{ total: 500 }],
+    [{ total: 1000 }],
+  ];
+}
+
+describe('cashSession.getExpected — matriz rol × ajuste', () => {
+  it.each([
+    ['worker', true, false],
+    ['worker', false, true],
+    ['manager', true, true],
+    ['manager', false, true],
+    ['admin', true, true],
+  ] as const)('rol %s, ciego=%s → visible: %s', async (role, blind, visible) => {
+    const { db } = queuedDb(expectedQueue(blind, role));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.getExpected();
+
+    expect(result?.visible).toBe(visible);
+    expect(result?.expectedAmountCents).toBe(visible ? 12000 : null);
+  });
+
+  it('suma en céntimos enteros con cobros en efectivo, entradas y salidas', async () => {
+    const { db } = queuedDb([
+      [{ id: SESSION_ID, openingAmountCents: 10000 }],
+      [{ blindCashClose: false }],
+      [{ role: 'worker' }],
+      [{ total: '2550' }], // SUM llega como string desde Postgres
+      [{ total: '505' }],
+      [{ total: '1001' }],
+    ]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.getExpected();
+
+    expect(result?.expectedAmountCents).toBe(12054); // 10000 + 2550 + 505 − 1001
+    expect(Number.isInteger(result?.expectedAmountCents)).toBe(true);
+  });
+
+  it('sin sesión abierta → null', async () => {
+    const { db } = queuedDb([[]]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    expect(await caller.cashSession.getExpected()).toBeNull();
+  });
+
+  it('sin empleado con PIN → UNAUTHORIZED', async () => {
+    const { db } = queuedDb([]);
+    const ctx: Context = {
+      auth: { kind: 'device', deviceId: DEV_ID, businessId: BIZ_A, employeeId: null },
+      db,
+      ip: '127.0.0.1',
+    };
+    const caller = createCaller(ctx);
+    await expect(caller.cashSession.getExpected()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+});
+
+// ── getCurrent ───────────────────────────────────────────────────────────────
+
+describe('cashSession.getCurrent', () => {
+  it('el select es explícito y no incluye campos de cuadre', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: SESSION_ID, openingAmountCents: 10000, status: 'open' }],
+    ]);
+    const caller = createCaller({ ...deviceCtx(), db });
+    await caller.cashSession.getCurrent();
+
+    const selectArg = calls.find((c) => c.method === 'select')?.args[0] as Record<string, unknown>;
+    expect(Object.keys(selectArg)).toEqual(
+      expect.arrayContaining(['id', 'openingAmountCents', 'openedAt', 'openedBy', 'status']),
+    );
+    expect(selectArg).not.toHaveProperty('expectedAmountCents');
+    expect(selectArg).not.toHaveProperty('differenceCents');
+    expect(selectArg).not.toHaveProperty('countedAmountCents');
   });
 });
 
@@ -220,5 +371,82 @@ describe('cashSession.getZReport — aislamiento multi-tenant', () => {
     await expect(caller.cashSession.getZReport({ sessionId: SESSION_ID })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+// ── getZReport — cierre ciego ────────────────────────────────────────────────
+
+function zReportQueue(status: 'open' | 'closed', blind: boolean, role: string): unknown[][] {
+  const closed = status === 'closed';
+  return [
+    [
+      {
+        id: SESSION_ID,
+        status,
+        openingAmountCents: 10000,
+        openedBy: EMP_ID,
+        closedBy: closed ? EMP_ID : null,
+        countedAmountCents: closed ? 12010 : null,
+        expectedAmountCents: closed ? 12000 : null,
+        differenceCents: closed ? 10 : null,
+      },
+    ],
+    [{ blindCashClose: blind }], // visibilidad
+    [{ role }],
+    [{ name: 'Bar Demo' }], // cabecera del informe
+    [], // payments
+    [], // movements
+    [{ id: EMP_ID, name: 'Empleado' }], // nombres
+  ];
+}
+
+describe('cashSession.getZReport — cierre ciego', () => {
+  it('informe X (abierta) + worker + ciego → FORBIDDEN', async () => {
+    const { db } = queuedDb(zReportQueue('open', true, 'worker'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    await expect(caller.cashSession.getZReport({ sessionId: SESSION_ID })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('informe X (abierta) + worker + NO ciego → completo', async () => {
+    const { db } = queuedDb(zReportQueue('open', false, 'worker'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.getZReport({ sessionId: SESSION_ID });
+    expect(result.session.id).toBe(SESSION_ID);
+  });
+
+  it('informe X (abierta) + manager + ciego → completo', async () => {
+    const { db } = queuedDb(zReportQueue('open', true, 'manager'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const result = await caller.cashSession.getZReport({ sessionId: SESSION_ID });
+    expect(result.session.id).toBe(SESSION_ID);
+  });
+
+  it('informe Z (cerrada) + worker + ciego → esperado y descuadre a null, recuento intacto', async () => {
+    const { db } = queuedDb(zReportQueue('closed', true, 'worker'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const { session } = await caller.cashSession.getZReport({ sessionId: SESSION_ID });
+
+    expect(session.expectedAmountCents).toBeNull();
+    expect(session.differenceCents).toBeNull();
+    expect(session.countedAmountCents).toBe(12010);
+  });
+
+  it('informe Z (cerrada) + manager + ciego → completo', async () => {
+    const { db } = queuedDb(zReportQueue('closed', true, 'manager'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const { session } = await caller.cashSession.getZReport({ sessionId: SESSION_ID });
+
+    expect(session.expectedAmountCents).toBe(12000);
+    expect(session.differenceCents).toBe(10);
+  });
+
+  it('informe Z (cerrada) + worker + NO ciego → completo', async () => {
+    const { db } = queuedDb(zReportQueue('closed', false, 'worker'));
+    const caller = createCaller({ ...deviceCtx(), db });
+    const { session } = await caller.cashSession.getZReport({ sessionId: SESSION_ID });
+
+    expect(session.expectedAmountCents).toBe(12000);
   });
 });

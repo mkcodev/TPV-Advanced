@@ -76,6 +76,7 @@ Un local físico (el bar). Aquí van los datos fiscales que salen en el ticket.
 | currency | text | default 'EUR' |
 | verifactu_mode | text (enum) | 'verifactu' / 'no_verifactu' / 'disabled' |
 | invoice_series | text | Serie de facturación. **Incluye el año** (ej. `A2027`); rotación anual automática. Verificar convención con gestor. |
+| blind_cash_close | boolean | `NOT NULL DEFAULT true` (migración 0006). Cierre ciego: si es true, un worker no recibe el efectivo esperado ni el descuadre (manager/admin sí). Lo edita manager/admin en `/admin/settings`. |
 | is_active | boolean | |
 | created_at, updated_at | timestamptz | |
 
@@ -490,9 +491,9 @@ Sesión de caja: apertura con fondo, cierre con recuento.
 | opening_amount_cents | integer | Fondo de caja |
 | closed_by | uuid FK→employees (nullable) | |
 | closed_at | timestamptz (nullable) | |
-| counted_amount_cents | integer (nullable) | Recuento real (puede ser ciego — el empleado cuenta sin ver el esperado) |
-| expected_amount_cents | integer (nullable) | Lo que debería haber (incluye los cash_movements de la sesión) |
-| difference_cents | integer (nullable) | Descuadre = counted − expected |
+| counted_amount_cents | integer (nullable) | Recuento real (ciego si `businesses.blind_cash_close` y el empleado es worker: cuenta sin ver el esperado) |
+| expected_amount_cents | integer (nullable) | Lo que debería haber (incluye los cash_movements de la sesión). **Se guarda siempre real**; con cierre ciego solo se oculta en las respuestas de la API a un worker |
+| difference_cents | integer (nullable) | Descuadre = counted − expected. Igual: se guarda real y se oculta a un worker con cierre ciego |
 | status | text (enum) | 'open' / 'closed' |
 
 ### cash_movements (movimientos manuales de caja)
@@ -677,6 +678,7 @@ El desglose del ticket se calcula **por bloques de tipo de IVA** (no línea a l�
 | `orders` | `(business_id, created_at)` | Normal |
 | `orders` | `(table_id) WHERE status='open'` | **UNIQUE parcial** (garantiza 1 comanda abierta por mesa) |
 | `orders` | `(business_id, order_number)` | **UNIQUE** |
+| `cash_sessions` | `(device_id) WHERE status='open'` | **UNIQUE parcial** (1 sesión de caja abierta por dispositivo; migración 0005) |
 | `order_items` | `(order_id)` | Normal |
 | `order_items` | `(order_id, status)` | Normal (KDS) |
 | `payments` | `(order_id)` | Normal |
