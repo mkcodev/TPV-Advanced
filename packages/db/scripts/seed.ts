@@ -15,18 +15,24 @@ import { createClient } from '@supabase/supabase-js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createDb } from '../src/client';
 import {
+  billingRecords,
   businesses,
   customers,
   devices,
   employees,
+  invoices,
   memberships,
   orderEvents,
   orderItems,
   orders,
   organizations,
+  payments,
   productCategories,
   products,
+  stockMovements,
+  tables,
   users,
+  zones,
 } from '../src/schema/index';
 
 function requireEnv(name: string): string {
@@ -44,6 +50,7 @@ const DEMO_PASSWORD = 'AdminTPV1234!';
 const DEMO_ORGANIZATION_NAME = 'Bar Demo SL';
 const DEMO_BUSINESS_NAME = 'Bar Demo';
 const DEMO_DEVICE_NAME = 'Terminal Demo';
+const DEMO_ZONE_NAME = 'Sala';
 
 async function main() {
   // Este script borra datos: nunca debe poder ejecutarse contra producción.
@@ -116,20 +123,47 @@ async function main() {
     // --- Reset ---
     // No se borra el negocio, los empleados ni el dispositivo: system_events apunta a ellos
     // y es una tabla legal de solo añadir (regla 6 de CLAUDE.md), así que nunca se toca.
-    // En transacción: si algo falla, no se queda un borrado a medias.
-    await db.transaction(async (tx) => {
-      const demoOrderIds = tx
-        .select({ id: orders.id })
-        .from(orders)
-        .where(eq(orders.businessId, business.id));
+    //
+    // Tampoco se puede borrar una comanda que ya tenga factura, registro de facturación,
+    // movimiento de stock (tablas legales) o pago. Si hay alguno, se salta el reset y el seed
+    // solo añade lo que falte (ver "ensure by name" más abajo).
+    const salesHistory = await Promise.all([
+      db.select({ id: invoices.id }).from(invoices).where(eq(invoices.businessId, business.id)),
+      db
+        .select({ id: billingRecords.id })
+        .from(billingRecords)
+        .where(eq(billingRecords.businessId, business.id)),
+      db
+        .select({ id: stockMovements.id })
+        .from(stockMovements)
+        .where(eq(stockMovements.businessId, business.id)),
+      db.select({ id: payments.id }).from(payments).where(eq(payments.businessId, business.id)),
+    ]);
+    const hasSalesHistory = salesHistory.some((rows) => rows.length > 0);
 
-      await tx.delete(orderEvents).where(eq(orderEvents.businessId, business.id));
-      await tx.delete(orderItems).where(inArray(orderItems.orderId, demoOrderIds));
-      await tx.delete(orders).where(eq(orders.businessId, business.id));
-      await tx.delete(products).where(eq(products.businessId, business.id));
-      await tx.delete(productCategories).where(eq(productCategories.businessId, business.id));
-      await tx.delete(customers).where(eq(customers.businessId, business.id));
-    });
+    if (hasSalesHistory) {
+      console.log(
+        '⚠ El negocio demo ya tiene ventas (facturas o pagos): no se resetea, solo se añade lo que falte.',
+      );
+    } else {
+      // En transacción: si algo falla, no se queda un borrado a medias.
+      await db.transaction(async (tx) => {
+        const demoOrderIds = tx
+          .select({ id: orders.id })
+          .from(orders)
+          .where(eq(orders.businessId, business.id));
+
+        await tx.delete(orderEvents).where(eq(orderEvents.businessId, business.id));
+        await tx.delete(orderItems).where(inArray(orderItems.orderId, demoOrderIds));
+        await tx.delete(orders).where(eq(orders.businessId, business.id));
+        // Mesas antes que zonas (FK tables.zone_id); las comandas ya no apuntan a ellas.
+        await tx.delete(tables).where(eq(tables.businessId, business.id));
+        await tx.delete(zones).where(eq(zones.businessId, business.id));
+        await tx.delete(products).where(eq(products.businessId, business.id));
+        await tx.delete(productCategories).where(eq(productCategories.businessId, business.id));
+        await tx.delete(customers).where(eq(customers.businessId, business.id));
+      });
+    }
   } else {
     const [org] = await db
       .insert(organizations)
@@ -147,66 +181,91 @@ async function main() {
     await db.insert(memberships).values({ userId, organizationId: org.id, role: 'owner' });
   }
 
-  // --- Catalog ---
-  const [catBebidas, catComida, catPostres] = await db
-    .insert(productCategories)
-    .values([
-      { businessId: business.id, name: 'Bebidas', displayOrder: 1, printDestination: 'bar' },
-      { businessId: business.id, name: 'Comida', displayOrder: 2, printDestination: 'kitchen' },
-      { businessId: business.id, name: 'Postres', displayOrder: 3, printDestination: 'none' },
-    ])
-    .returning({ id: productCategories.id });
+  // --- Floor ---
+  // "Ensure by name": se crea solo lo que falta, así el seed se puede repetir aunque el reset
+  // se haya saltado. Medidas como las del editor de mesas: 80x80, cuadrícula de 10, margen de 20.
+  const [existingZone] = await db
+    .select({ id: zones.id })
+    .from(zones)
+    .where(and(eq(zones.businessId, business.id), eq(zones.name, DEMO_ZONE_NAME)));
 
-  await db.insert(products).values([
-    {
+  let zoneId = existingZone?.id;
+  if (!zoneId) {
+    const [createdZone] = await db
+      .insert(zones)
+      .values({ businessId: business.id, name: DEMO_ZONE_NAME, displayOrder: 1 })
+      .returning({ id: zones.id });
+    if (!createdZone) throw new Error('Failed to insert demo zone');
+    zoneId = createdZone.id;
+  }
+
+  const existingTables = await db
+    .select({ name: tables.name })
+    .from(tables)
+    .where(and(eq(tables.businessId, business.id), eq(tables.zoneId, zoneId)));
+  const existingTableNames = new Set(existingTables.map((t) => t.name));
+
+  const missingTables = (['square', 'square', 'round', 'round'] as const)
+    .map((shape, i) => ({
       businessId: business.id,
-      categoryId: catBebidas.id,
-      name: 'Café con leche',
-      basePriceCents: 150,
-      taxRate: '10.00',
-      displayOrder: 1,
-    },
-    {
-      businessId: business.id,
-      categoryId: catBebidas.id,
-      name: 'Cerveza',
-      basePriceCents: 250,
-      taxRate: '10.00',
-      displayOrder: 2,
-    },
-    {
-      businessId: business.id,
-      categoryId: catBebidas.id,
-      name: 'Agua mineral',
-      basePriceCents: 150,
-      taxRate: '10.00',
-      displayOrder: 3,
-    },
-    {
-      businessId: business.id,
-      categoryId: catComida.id,
-      name: 'Tortilla española',
-      basePriceCents: 800,
-      taxRate: '10.00',
-      displayOrder: 1,
-    },
-    {
-      businessId: business.id,
-      categoryId: catComida.id,
-      name: 'Bocadillo de jamón',
-      basePriceCents: 600,
-      taxRate: '10.00',
-      displayOrder: 2,
-    },
-    {
-      businessId: business.id,
-      categoryId: catPostres.id,
-      name: 'Tarta del día',
-      basePriceCents: 450,
-      taxRate: '10.00',
-      displayOrder: 1,
-    },
-  ]);
+      zoneId,
+      name: `Mesa ${i + 1}`,
+      posX: 20 + i * 120,
+      posY: 20,
+      width: 80,
+      height: 80,
+      shape,
+      seats: 4,
+    }))
+    .filter((t) => !existingTableNames.has(t.name));
+  if (missingTables.length > 0) await db.insert(tables).values(missingTables);
+
+  // --- Catalog (ensure by name) ---
+  const demoCategories = [
+    { name: 'Bebidas', displayOrder: 1, printDestination: 'bar' },
+    { name: 'Comida', displayOrder: 2, printDestination: 'kitchen' },
+    { name: 'Postres', displayOrder: 3, printDestination: 'none' },
+  ] as const;
+
+  const existingCategories = await db
+    .select({ id: productCategories.id, name: productCategories.name })
+    .from(productCategories)
+    .where(eq(productCategories.businessId, business.id));
+  const categoryIds = new Map(existingCategories.map((c) => [c.name, c.id]));
+
+  for (const category of demoCategories) {
+    if (categoryIds.has(category.name)) continue;
+    const [created] = await db
+      .insert(productCategories)
+      .values({ businessId: business.id, ...category })
+      .returning({ id: productCategories.id });
+    if (!created) throw new Error(`Failed to insert category ${category.name}`);
+    categoryIds.set(category.name, created.id);
+  }
+
+  const demoProducts = [
+    { category: 'Bebidas', name: 'Café con leche', basePriceCents: 150, displayOrder: 1 },
+    { category: 'Bebidas', name: 'Cerveza', basePriceCents: 250, displayOrder: 2 },
+    { category: 'Bebidas', name: 'Agua mineral', basePriceCents: 150, displayOrder: 3 },
+    { category: 'Comida', name: 'Tortilla española', basePriceCents: 800, displayOrder: 1 },
+    { category: 'Comida', name: 'Bocadillo de jamón', basePriceCents: 600, displayOrder: 2 },
+    { category: 'Postres', name: 'Tarta del día', basePriceCents: 450, displayOrder: 1 },
+  ];
+
+  const existingProducts = await db
+    .select({ name: products.name })
+    .from(products)
+    .where(eq(products.businessId, business.id));
+  const existingProductNames = new Set(existingProducts.map((p) => p.name));
+
+  const missingProducts = demoProducts
+    .filter((p) => !existingProductNames.has(p.name))
+    .map(({ category, ...product }) => {
+      const categoryId = categoryIds.get(category);
+      if (!categoryId) throw new Error(`Missing demo category ${category}`);
+      return { businessId: business.id, categoryId, taxRate: '10.00', ...product };
+    });
+  if (missingProducts.length > 0) await db.insert(products).values(missingProducts);
 
   // --- Employees ---
   const ARGON2_OPTIONS = { memoryCost: 65536, timeCost: 3, outputLen: 32, parallelism: 1 } as const;

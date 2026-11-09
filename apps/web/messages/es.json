@@ -57,6 +57,7 @@
     },
     "dashboard": {
       "greeting": "Hola, {name}",
+      "greetingNoName": "Hola",
       "subtitle": "¿Qué quieres hacer hoy?",
       "quickAccess": {
         "catalog": {
@@ -379,9 +380,9 @@
       "counter": "Venta rápida barra",
       "counterHint": "Sin mesa asignada",
       "backToFloor": "Volver al plano",
-      "tableLabel": "Mesa {name}",
+      "tableLabel": "{name}",
       "zoneLabel": "{zone}",
-      "orderContext": "Mesa {name} · {zone}",
+      "orderContext": "{name} · {zone}",
       "free": "Libre",
       "occupied": "Ocupada",
       "billing": "Por cobrar",
