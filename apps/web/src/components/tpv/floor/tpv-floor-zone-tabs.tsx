@@ -3,11 +3,23 @@
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { TpvFloorView } from './tpv-floor-view';
 
 export function TpvFloorZoneTabs() {
   const t = useTranslations('tpv.floor');
+  const router = useRouter();
+  const utils = trpc.useUtils();
+
+  // Precarga la pantalla de venta y el catálogo desde el plano: al abrir una mesa ya están
+  // listos. Mismos inputs y staleTime que TpvShell, para que use esta misma caché.
+  useEffect(() => {
+    router.prefetch('/tpv/order');
+    void utils.catalog.categories.list.prefetch({ includeInactive: false }, { staleTime: 60_000 });
+    void utils.catalog.products.list.prefetch({}, { staleTime: 60_000 });
+  }, [router, utils]);
+
   const { data } = trpc.floor.zones.list.useQuery({});
   const zones = data ?? [];
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);

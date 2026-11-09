@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AppRouter } from '@tpv/api';
-import { TRPCClientError, httpBatchLink } from '@trpc/client';
+import { TRPCClientError, httpBatchStreamLink } from '@trpc/client';
 import type { TRPCLink } from '@trpc/client';
 import { observable } from '@trpc/server/observable';
 import { useState } from 'react';
@@ -68,7 +68,9 @@ export function TpvTRPCProvider({ children }: { children: React.ReactNode }) {
     trpc.createClient({
       links: [
         tpvErrorLink,
-        httpBatchLink({
+        // Stream: cada respuesta del lote llega al terminar la suya, así una consulta lenta
+        // (el esperado de caja) no retrasa el pintado de las mesas.
+        httpBatchStreamLink({
           url: '/api/trpc',
           headers() {
             const { deviceToken } = useDeviceStore.getState();

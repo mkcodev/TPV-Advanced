@@ -1,6 +1,8 @@
 import 'server-only';
 
+import { getSupabaseServer } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { cache } from 'react';
 
 export type AdminBusiness = {
   id: string;
@@ -15,6 +17,22 @@ export type AdminMembership = {
   role: 'owner' | 'admin' | 'staff';
   businesses: AdminBusiness[];
 };
+
+// React cache = memoria solo durante UNA petición: layouts y página comparten resultado y
+// Supabase se consulta una vez. getUser sigue validando el token en cada petición nueva.
+export const getRequestSupabase = cache(getSupabaseServer);
+
+export const getAdminUser = cache(async () => {
+  const supabase = await getRequestSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
+export const getAdminMemberships = cache(async (userId: string) =>
+  listAdminMemberships(await getRequestSupabase(), userId),
+);
 
 // Nombre completo del perfil (public.users). La política RLS solo deja ver la fila propia,
 // así que hay que usar el cliente Supabase del usuario, igual que en listAdminMemberships.
