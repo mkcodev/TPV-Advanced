@@ -9,5 +9,7 @@
     "lineWidth": 100
   },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
-  "files": { "ignore": ["node_modules", "dist", ".next", ".expo", "out", "migrations"] }
+  "files": {
+    "ignore": ["node_modules", "dist", ".next", ".expo", "out", "migrations", "next-env.d.ts"]
+  }
 }
