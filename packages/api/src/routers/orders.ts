@@ -36,7 +36,7 @@ import {
   upsertOrderSchema,
 } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { deviceProcedure } from '../procedures';
 import { router } from '../trpc';
 
@@ -143,19 +143,22 @@ async function insertLines(
   }
 }
 
+// Devuelve true si la comanda "creció": hay líneas nuevas o alguna cantidad sube.
+// Quitar líneas o bajar cantidades NO cuenta. Solo crecer anula el "pedir cuenta".
 async function reconcileLines(
   tx: BusinessTransaction,
   orderId: string,
   businessId: string,
   employeeId: string,
   inputLines: InputLine[],
-): Promise<void> {
+): Promise<boolean> {
   const existing = await tx
     .select({
       id: orderItems.id,
       productId: orderItems.productId,
       variantId: orderItems.variantId,
       unitPriceCents: orderItems.unitPriceCents,
+      quantity: orderItems.quantity,
     })
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
@@ -179,9 +182,11 @@ async function reconcileLines(
 
   // Lines in input: update existing, insert new.
   const toInsert: InputLine[] = [];
+  let grew = false;
   for (const line of inputLines) {
     const ex = existingMap.get(line.lineId);
     if (ex) {
+      if (line.quantity > ex.quantity) grew = true;
       // Snapshot immutability: productId and variantId are frozen at line creation.
       if (ex.productId !== line.productId || ex.variantId !== (line.variantId ?? null)) {
         throw new TRPCError({
@@ -206,7 +211,9 @@ async function reconcileLines(
 
   if (toInsert.length > 0) {
     await insertLines(tx, orderId, businessId, employeeId, toInsert);
+    grew = true;
   }
+  return grew;
 }
 
 async function applyTotals(
@@ -344,10 +351,15 @@ export const ordersRouter = router({
         if (existing.status !== 'open') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order is not open' });
         }
-        await reconcileLines(tx, input.orderId, ctx.businessId, employeeId, input.lines);
+        const grew = await reconcileLines(tx, input.orderId, ctx.businessId, employeeId, input.lines);
         await tx
           .update(orders)
-          .set({ notes: input.notes ?? null, updatedAt: new Date() })
+          .set({
+            notes: input.notes ?? null,
+            updatedAt: new Date(),
+            // Añadir líneas o subir cantidades anula "pedir cuenta": la mesa vuelve a "ocupada".
+            ...(grew && { billRequestedAt: null }),
+          })
           .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)));
       }
 
@@ -600,6 +612,66 @@ export const ordersRouter = router({
         invoiceSeries,
         invoiceNumber,
       };
+    });
+  }),
+
+  // "Pedir cuenta": marca la comanda abierta como pendiente de cobro (bill_requested_at).
+  // Idempotente: si ya estaba pedida conserva la primera hora y no repite el evento.
+  // El negocio sale de ctx; el orderId se busca siempre acotado a él.
+  requestBill: deviceProcedure.input(orderIdSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+    const employeeId = ctx.employeeId;
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      // Bloqueo de la fila: evita carreras con un upsert/pago simultáneo.
+      const [order] = await tx
+        .select({
+          id: orders.id,
+          status: orders.status,
+          billRequestedAt: orders.billRequestedAt,
+        })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
+        .for('update');
+
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: 'Order not found' });
+      if (order.status !== 'open') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Order is not open' });
+      }
+
+      const [countRow] = await tx
+        .select({ n: sql<number>`count(*)`.mapWith(Number) })
+        .from(orderItems)
+        .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, 'cancelled')));
+      if ((countRow?.n ?? 0) === 0) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Cannot request the bill on an order without lines',
+        });
+      }
+
+      const [updated] = await tx
+        .update(orders)
+        .set({
+          billRequestedAt: sql`COALESCE(${orders.billRequestedAt}, now())`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(orders.id, order.id), eq(orders.businessId, ctx.businessId)))
+        .returning({ billRequestedAt: orders.billRequestedAt });
+
+      if (order.billRequestedAt === null) {
+        await tx.insert(orderEvents).values({
+          orderId: order.id,
+          businessId: ctx.businessId,
+          eventType: 'bill_requested',
+          employeeId,
+          payload: {},
+        });
+      }
+
+      return { orderId: order.id, billRequestedAt: updated?.billRequestedAt ?? null };
     });
   }),
 

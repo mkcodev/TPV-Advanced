@@ -279,6 +279,30 @@ describe('orders.pay — parcial', () => {
     expect(result.remainingCents).toBe(1500);
     expect(result.paidCents).toBe(500);
   });
+
+  it('el pago parcial no escribe en orders: bill_requested_at queda intacto', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', totalCents: 2000, orderNumber: 3, version: 1 }],
+      [{ lineTotalCents: 2000, taxRate: '21.00' }],
+      [],
+      [{ id: PAY_ID }],
+      [{}],
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.pay({
+      orderId: ORDER_ID,
+      payments: [{ method: 'card', amountCents: 500 }],
+    });
+    // Ningún UPDATE ... SET sobre orders (el INSERT de pagos usa values, no set).
+    expect(calls.find((c) => c.method === 'set')).toBeUndefined();
+  });
+
+  it('el pago total pasa la comanda a paid (la mesa queda libre en el plano)', async () => {
+    const { db, calls } = queuedDb(payQueue());
+    await createCaller({ ...deviceCtx(), db }).orders.pay(CASH_INPUT);
+    const setRow = calls.find((c) => c.method === 'set')?.args[0] as Record<string, unknown>;
+    expect(setRow?.status).toBe('paid');
+    // listWithOpenOrders solo une comandas con status='open': 'paid' deja la mesa libre.
+  });
 });
 
 // ── Overpayment (amountCents > total sin efectivo) → BAD_REQUEST ─────────────

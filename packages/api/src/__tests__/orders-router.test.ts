@@ -7,10 +7,16 @@
 
 import type { Database } from '@tpv/db';
 import { upsertOrderSchema } from '@tpv/validators';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import type { Context } from '../context';
 import { ordersRouter } from '../routers/orders';
 import { createCallerFactory, router } from '../trpc';
+
+// Parámetros bind de un fragmento SQL de Drizzle (para comprobar el business_id usado).
+function sqlParams(fragment: unknown): unknown[] {
+  return new PgDialect().sqlToQuery(fragment as Parameters<PgDialect['sqlToQuery']>[0]).params;
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -358,6 +364,222 @@ describe('orders.getById — sin employeeId', () => {
     await expect(caller.orders.getById({ orderId: ORDER_ID })).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     });
+  });
+});
+
+// ── bill_requested_at: solo AÑADIR líneas o SUBIR cantidades lo pone a NULL ──────
+
+const NEW_LINE_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
+const existingLine = (quantity: number, id = LINE_ID) => ({
+  id,
+  productId: PROD_ID,
+  variantId: null,
+  unitPriceCents: 250,
+  quantity,
+});
+
+// Cola del final del camino UPDATE: cabecera, totales, comanda final y líneas finales.
+function updateTail(): unknown[][] {
+  return [
+    [{}], // update orders header
+    [{ lineTotalCents: 250, taxRate: '10.00' }], // select items for totals
+    [{}], // update orders totals
+    [
+      {
+        id: ORDER_ID,
+        orderNumber: 1,
+        status: 'open',
+        subtotalCents: 227,
+        taxTotalCents: 23,
+        totalCents: 250,
+        version: 3,
+      },
+    ],
+    [{ id: LINE_ID, productId: PROD_ID, variantId: null, nameSnapshot: 'Cerveza' }],
+  ];
+}
+
+// El SET de la cabecera de la comanda: el único con 'notes' y sin 'quantity' (el de la línea
+// lleva quantity; el de los totales no lleva notes).
+function headerSet(calls: RecordedCall[]): Record<string, unknown> | undefined {
+  return calls
+    .filter((c) => c.method === 'set')
+    .map((c) => c.args[0] as Record<string, unknown>)
+    .find((a) => 'notes' in a && !('quantity' in a));
+}
+
+describe('orders.upsert — reglas de bill_requested_at', () => {
+  it('añadir una línea nueva lo pone a NULL', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1)],
+      [{}], // update línea existente
+      [{ id: PROD_ID, name: 'Tapa', basePriceCents: 250, taxRate: '10.00' }], // product
+      [{}], // insert orderItems
+      [{}], // insert orderEvents
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert({
+      ...MIN_INPUT,
+      lines: [
+        { lineId: LINE_ID, productId: PROD_ID, quantity: 1 },
+        { lineId: NEW_LINE_ID, productId: PROD_ID, quantity: 1 },
+      ],
+    });
+    expect(headerSet(calls)).toHaveProperty('billRequestedAt', null);
+  });
+
+  it('subir la cantidad de una línea lo pone a NULL', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1)],
+      [{}],
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert({
+      ...MIN_INPUT,
+      lines: [{ lineId: LINE_ID, productId: PROD_ID, quantity: 2 }],
+    });
+    expect(headerSet(calls)).toHaveProperty('billRequestedAt', null);
+  });
+
+  it('bajar la cantidad NO lo toca', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(3)],
+      [{}],
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert({
+      ...MIN_INPUT,
+      lines: [{ lineId: LINE_ID, productId: PROD_ID, quantity: 1 }],
+    });
+    expect(headerSet(calls)).toBeDefined();
+    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
+  });
+
+  it('quitar una línea NO lo toca', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1), existingLine(1, NEW_LINE_ID)],
+      [{}], // delete de la línea que sobra
+      [{}], // update línea que queda
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
+    expect(headerSet(calls)).toBeDefined();
+    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
+  });
+
+  it('guardar sin cambios (misma cantidad) NO lo toca', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1)],
+      [{}],
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
+    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
+  });
+
+  it('una comanda nueva nace sin bill_requested_at', async () => {
+    const { db, calls } = queuedDb(singleLineInsertQueue());
+    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
+    const orderValues = calls.find((c) => c.method === 'values')?.args[0] as Record<
+      string,
+      unknown
+    >;
+    expect(orderValues).not.toHaveProperty('billRequestedAt');
+  });
+});
+
+// ── requestBill ──────────────────────────────────────────────────────────────
+
+describe('orders.requestBill', () => {
+  const asked = new Date('2026-11-09T20:30:00Z');
+
+  it('sin empleado con PIN → UNAUTHORIZED', async () => {
+    const { db } = queuedDb([]);
+    const caller = createCaller({
+      ...deviceCtx(),
+      auth: { kind: 'device', deviceId: DEV_ID, businessId: BIZ_ID, employeeId: null },
+      db,
+    });
+    await expect(caller.orders.requestBill({ orderId: ORDER_ID })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  it('comanda de otro negocio (no aparece con el business_id del ctx) → NOT_FOUND', async () => {
+    const { db, calls } = queuedDb([[]]);
+    await expect(
+      createCaller({ ...deviceCtx(), db }).orders.requestBill({ orderId: ORDER_ID }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const where = calls.find((c) => c.method === 'where')?.args[0];
+    expect(sqlParams(where)).toEqual(expect.arrayContaining([ORDER_ID, BIZ_ID]));
+  });
+
+  it('comanda ya cobrada → PRECONDITION_FAILED y no escribe', async () => {
+    const { db, calls } = queuedDb([[{ id: ORDER_ID, status: 'paid', billRequestedAt: null }]]);
+    await expect(
+      createCaller({ ...deviceCtx(), db }).orders.requestBill({ orderId: ORDER_ID }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(calls.find((c) => c.method === 'set')).toBeUndefined();
+  });
+
+  it('comanda sin líneas → PRECONDITION_FAILED y no escribe', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', billRequestedAt: null }],
+      [{ n: 0 }],
+    ]);
+    await expect(
+      createCaller({ ...deviceCtx(), db }).orders.requestBill({ orderId: ORDER_ID }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(calls.find((c) => c.method === 'set')).toBeUndefined();
+    expect(calls.find((c) => c.method === 'values')).toBeUndefined();
+  });
+
+  it('comanda abierta con líneas → fija bill_requested_at (acotado al negocio) y registra el evento', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', billRequestedAt: null }],
+      [{ n: 2 }],
+      [{ billRequestedAt: asked }], // update … returning
+      [{}], // insert order_events
+    ]);
+    const result = await createCaller({ ...deviceCtx(), db }).orders.requestBill({
+      orderId: ORDER_ID,
+    });
+
+    expect(result).toEqual({ orderId: ORDER_ID, billRequestedAt: asked });
+    const setRow = calls.find((c) => c.method === 'set')?.args[0] as Record<string, unknown>;
+    expect(setRow).toHaveProperty('billRequestedAt'); // COALESCE(bill_requested_at, now())
+    const wheres = calls.filter((c) => c.method === 'where');
+    expect(sqlParams(wheres[wheres.length - 1]?.args[0])).toContain(BIZ_ID);
+    const event = calls.find((c) => c.method === 'values')?.args[0] as Record<string, unknown>;
+    expect(event).toMatchObject({ eventType: 'bill_requested', businessId: BIZ_ID });
+  });
+
+  it('idempotente: si ya estaba pedida devuelve la misma hora y no repite el evento', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open', billRequestedAt: asked }],
+      [{ n: 2 }],
+      [{ billRequestedAt: asked }],
+    ]);
+    const result = await createCaller({ ...deviceCtx(), db }).orders.requestBill({
+      orderId: ORDER_ID,
+    });
+    expect(result.billRequestedAt).toEqual(asked);
+    expect(calls.find((c) => c.method === 'values')).toBeUndefined();
+  });
+
+  it('un businessId en el input se rechaza (BAD_REQUEST)', async () => {
+    const { db } = queuedDb([]);
+    await expect(
+      createCaller({ ...deviceCtx(), db }).orders.requestBill({
+        orderId: ORDER_ID,
+        businessId: 'biz-x',
+      } as unknown as { orderId: string }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });
 
