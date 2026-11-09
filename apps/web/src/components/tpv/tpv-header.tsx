@@ -1,6 +1,7 @@
 'use client';
 
 import { useOrderStore } from '@/lib/stores/use-order-store';
+import { trpc } from '@/lib/trpc/client';
 import { Separator } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
 import { useShallow } from 'zustand/react/shallow';
@@ -15,13 +16,17 @@ export function TpvHeader() {
     useShallow((s) => ({ type: s.type, tableName: s.tableName, zoneName: s.zoneName })),
   );
 
+  // El nombre del negocio casi nunca cambia: se pide una vez por sesión. Mientras carga,
+  // texto vacío (mejor que parpadear con un nombre falso).
+  const { data: business } = trpc.business.getName.useQuery(undefined, { staleTime: Infinity });
+
   const isTableOrder = type === 'dine_in';
   const contextLabel =
     isTableOrder && tableName
       ? zoneName
         ? t('floor.orderContext', { name: tableName, zone: zoneName })
         : t('floor.tableLabel', { name: tableName })
-      : t('header.businessName');
+      : (business?.name ?? '');
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-card px-4">

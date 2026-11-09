@@ -311,7 +311,6 @@
   },
   "tpv": {
     "header": {
-      "businessName": "Mi Negocio",
       "openMenu": "Abrir menú"
     },
     "sync": {
