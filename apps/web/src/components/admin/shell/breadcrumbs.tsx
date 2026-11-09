@@ -12,6 +12,7 @@ import {
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Fragment } from 'react';
 
 const ALL_ITEMS = [...NAV_GROUPS.flatMap((g) => g.items), ...FOOTER_NAV];
 
@@ -41,16 +42,20 @@ export function AdminBreadcrumbs() {
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
           return (
-            <BreadcrumbItem key={crumb.href}>
+            // Ambos son <li>: el separador va como hermano del item, nunca dentro (un <li> en
+            // otro <li> es HTML inválido y rompe la hidratación).
+            <Fragment key={crumb.href}>
               {i > 0 && <BreadcrumbSeparator />}
-              {isLast ? (
-                <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-              ) : (
-                <BreadcrumbLink asChild>
-                  <Link href={crumb.href}>{crumb.label}</Link>
-                </BreadcrumbLink>
-              )}
-            </BreadcrumbItem>
+              <BreadcrumbItem>
+                {isLast ? (
+                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link href={crumb.href}>{crumb.label}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
           );
         })}
       </BreadcrumbList>
