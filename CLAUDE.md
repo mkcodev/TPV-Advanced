@@ -96,8 +96,8 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts` |
 | Comandas (upsert, pay, getByTable…) | `orders.ts` | — |
 | Auth (device pairing, PIN login) | `auth.ts` | — |
-| Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol |
-| Ajustes del negocio (`blind_cash_close`) | `business.ts` | `managerProcedure`; ver `docs/PASO-0.5.md` |
+| Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol. `cashSumsColumns` es el único sitio que agrega el efectivo (una sentencia; lo usan `close` y `getExpected`) |
+| Ajustes del negocio (`blind_cash_close`) + `getName` (nombre para la cabecera del TPV) | `business.ts` | `getSettings`/`updateSettings` con `managerProcedure`; `getName` con `deviceProcedure`; ver `docs/PASO-0.5.md` |
 | Me (perfil del usuario admin) | `me.ts` | — |
 
 **Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`

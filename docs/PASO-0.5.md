@@ -103,9 +103,32 @@ Cierra #6, #7, #20 y #21. Esquema de BD: sí. Riesgo: medio (consulta con joins 
 
 Tests: `pendingCents` (pendiente ≥ 0 y ≤ total) y la función pura de estado visual. Router del plano: el total sale de BD, el pendiente descuenta pagos parciales y los joins filtran por negocio. `requestBill`: solo con comanda abierta, idempotente y acotada al negocio. Reglas de `bill_requested_at`: añadir líneas lo pone a `NULL`, y al cobrar del todo la mesa queda libre.
 
+### Reparto de PR-D en tres PRs
+
+PR-D toca unos 30 archivos, así que se parte:
+
+| PR | Contenido | Cierra |
+|---|---|---|
+| D1 | Nombre real del negocio en la cabecera, botón "Abrir TPV" en el admin y `getExpected` en una consulta | #20, #29 (y `Refs #24`) |
+| D2 | Migración 0007, estados y datos de mesa en el plano, "Pedir cuenta", "Volver al plano" optimista | #6, #7, #21 |
+| D3 | Ver más abajo | #30 |
+
+Puntos de parada: tras el merge de D1 se pausa para la prueba en el navegador (4 pasos). En D2 se pausa antes de `pnpm db:migrate` para revisar el `.sql` de 0007.
+
+## PR-D3 — Plano por posición
+
+Cierra #30. Esquema de BD: no. Riesgo: medio-bajo (solo presentación). Depende de D2.
+
+Hoy `tpv-floor-view.tsx` pinta las mesas en fila (`flex flex-wrap`) e ignora `tables.pos_x`, `pos_y`, `width` y `height`, así que colocar mesas en `/admin/floor` no tiene efecto en el TPV.
+
+- El plano del TPV coloca cada mesa según la posición y el tamaño definidos en el admin.
+- Función pura que traduce posición y tamaño a estilos, con test.
+- El tamaño mínimo sale de la constante única `TABLE_MIN_SIZE_CLASS` (introducida en D2), para que el objetivo táctil de 44 px no dependa del tamaño dibujado en el admin.
+- Texto por i18n y estilos con tokens.
+
 ## Orden y flujo
 
-Orden: A → B → C → D. Va de menor a mayor riesgo; C y D son independientes entre sí.
+Orden: A → B → C → D1 → D2 → D3. Va de menor a mayor riesgo; C y D son independientes entre sí.
 
 Por PR: rama desde `main` → código → `pnpm lint`, `pnpm typecheck` y `pnpm test` en verde → push → PR con `Closes #N` → CI.
 

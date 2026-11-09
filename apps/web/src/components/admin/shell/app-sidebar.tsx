@@ -12,6 +12,7 @@ import {
   SidebarSeparator,
 } from '@tpv/ui';
 import { SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@tpv/ui';
+import { Monitor } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { BusinessSwitcher } from './business-switcher';
@@ -35,6 +36,8 @@ type AppSidebarProps = {
 
 export function AppSidebar({ memberships, currentBusinessId, role, currentUser }: AppSidebarProps) {
   const t = useTranslations('admin.nav');
+  // Solo owner/admin entran al TPV desde el admin (misma regla que el menú de usuario).
+  const canOpenTpv = canSeeItem(role, 'admin');
 
   const visibleFooterItems = FOOTER_NAV.filter((item) => {
     if (!canSeeItem(role, item.minRole)) return false;
@@ -100,7 +103,21 @@ export function AppSidebar({ memberships, currentBusinessId, role, currentUser }
             </SidebarMenu>
           </>
         )}
-        <UserMenu email={currentUser.email} canOpenTpv={canSeeItem(role, 'admin')} />
+        {canOpenTpv && (
+          // Botón visible (#29): antes "Abrir TPV" solo estaba dentro del menú de usuario.
+          // El TPV además necesita un dispositivo emparejado (ver docs/PASO-0.5.md, límites de D1).
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild variant="outline" tooltip={t('openTpv')}>
+                <Link href="/tpv">
+                  <Monitor className="h-4 w-4 shrink-0" strokeWidth={1.5} aria-hidden="true" />
+                  <span>{t('openTpv')}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
+        <UserMenu email={currentUser.email} canOpenTpv={canOpenTpv} />
       </SidebarFooter>
 
       <SidebarRail />

@@ -26,53 +26,61 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { deviceProcedure, getEmployeeRole } from '../procedures';
 import { router } from '../trpc';
 
-// Único sitio donde se agrega el efectivo de una sesión: lo usan close y getExpected,
-// así el chip y el cierre nunca pueden divergir. Todas las sumas filtran por business_id.
+// Referencia a mano a la sesión que se está leyendo. Drizzle quita el prefijo de tabla en los
+// selects de una sola tabla y, dentro de una subconsulta, "id" se confundiría con el id de la
+// propia tabla de la subconsulta. Con el prefijo explícito siempre apunta a cash_sessions.
+const SESSION_ID_REF = sql.raw('"cash_sessions"."id"');
+
+// Las tres sumas de efectivo (cobros en efectivo, entradas, salidas) como subconsultas escalares:
+// una sola sentencia en vez de tres viajes a la BD (era ~660 ms con la caja abierta).
+// ÚNICO sitio donde se define la agregación: la usan close y getExpected, así el chip y el
+// cierre nunca pueden divergir. Cada subconsulta filtra por business_id.
+// .mapWith(Number): Postgres devuelve SUM como bigint (texto); aquí pasa a entero en céntimos.
+function cashSumsColumns(businessId: string) {
+  const movementsSum = (type: 'pay_in' | 'pay_out') =>
+    sql<number>`(SELECT COALESCE(SUM(${cashMovements.amountCents}), 0) FROM ${cashMovements} WHERE ${and(
+      eq(cashMovements.businessId, businessId),
+      eq(cashMovements.cashSessionId, SESSION_ID_REF),
+      eq(cashMovements.type, type),
+    )})`.mapWith(Number);
+
+  return {
+    cashPaymentsCents:
+      sql<number>`(SELECT COALESCE(SUM(${payments.amountCents}), 0) FROM ${payments} WHERE ${and(
+        eq(payments.businessId, businessId),
+        eq(payments.cashSessionId, SESSION_ID_REF),
+        eq(payments.method, 'cash'),
+        eq(payments.status, 'completed'),
+      )})`.mapWith(Number),
+    payInCents: movementsSum('pay_in'),
+    payOutCents: movementsSum('pay_out'),
+  };
+}
+
+type CashSums = { cashPaymentsCents: number; payInCents: number; payOutCents: number };
+
+// Fondo + cobros en efectivo + entradas − salidas. Cálculo puro en @tpv/core.
+function expectedFromSums(openingAmountCents: number, sums: CashSums | undefined): number {
+  return computeExpectedCashCents({
+    openingAmountCents,
+    cashPaymentsCents: sums?.cashPaymentsCents ?? 0,
+    payInCents: sums?.payInCents ?? 0,
+    payOutCents: sums?.payOutCents ?? 0,
+  });
+}
+
+// Esperado de una sesión ya cargada (lo usa close, que ya tiene la sesión bloqueada).
 async function loadExpectedCashCents(
   tx: BusinessTransaction,
   businessId: string,
   session: { id: string; openingAmountCents: number },
 ): Promise<number> {
-  const [cashRow] = await tx
-    .select({ total: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
-    .from(payments)
-    .where(
-      and(
-        eq(payments.businessId, businessId),
-        eq(payments.cashSessionId, session.id),
-        eq(payments.method, 'cash'),
-        eq(payments.status, 'completed'),
-      ),
-    );
-
-  const [payInRow] = await tx
-    .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
-    .from(cashMovements)
-    .where(
-      and(
-        eq(cashMovements.businessId, businessId),
-        eq(cashMovements.cashSessionId, session.id),
-        eq(cashMovements.type, 'pay_in'),
-      ),
-    );
-
-  const [payOutRow] = await tx
-    .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
-    .from(cashMovements)
-    .where(
-      and(
-        eq(cashMovements.businessId, businessId),
-        eq(cashMovements.cashSessionId, session.id),
-        eq(cashMovements.type, 'pay_out'),
-      ),
-    );
-
-  return computeExpectedCashCents({
-    openingAmountCents: session.openingAmountCents,
-    cashPaymentsCents: Number(cashRow?.total ?? 0),
-    payInCents: Number(payInRow?.total ?? 0),
-    payOutCents: Number(payOutRow?.total ?? 0),
-  });
+  const [sums] = await tx
+    .select(cashSumsColumns(businessId))
+    .from(cashSessions)
+    .where(and(eq(cashSessions.id, session.id), eq(cashSessions.businessId, businessId)))
+    .limit(1);
+  return expectedFromSums(session.openingAmountCents, sums);
 }
 
 // ¿Puede quien llama ver el esperado? Solo recibe ctx (nunca input del cliente):
@@ -267,11 +275,30 @@ export const cashSessionRouter = router({
     if (!ctx.employeeId) {
       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
     }
+    const employeeId = ctx.employeeId;
 
     return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
-      const [session] = await tx
-        .select({ id: cashSessions.id, openingAmountCents: cashSessions.openingAmountCents })
+      // UNA sola sentencia: sesión + ajuste del negocio + rol del empleado + las tres sumas.
+      // La condición del rol replica getEmployeeRole (id + negocio + activo) para que el
+      // resultado sea el mismo que en close. Las sumas se calculan siempre, pero con cierre
+      // ciego se descartan abajo: nunca salen en la respuesta.
+      const [row] = await tx
+        .select({
+          openingAmountCents: cashSessions.openingAmountCents,
+          blindCashClose: businesses.blindCashClose,
+          role: employees.role,
+          ...cashSumsColumns(ctx.businessId),
+        })
         .from(cashSessions)
+        .leftJoin(businesses, eq(businesses.id, ctx.businessId))
+        .leftJoin(
+          employees,
+          and(
+            eq(employees.id, employeeId),
+            eq(employees.businessId, ctx.businessId),
+            eq(employees.isActive, true),
+          ),
+        )
         .where(
           and(
             eq(cashSessions.businessId, ctx.businessId),
@@ -281,14 +308,15 @@ export const cashSessionRouter = router({
         )
         .limit(1);
 
-      if (!session) return null;
+      if (!row) return null;
 
-      if (!(await canCallerSeeExpected(tx, ctx))) {
+      // Fail-closed igual que canCallerSeeExpected: negocio o empleado sin fila => ciego.
+      if (!canSeeExpectedCash(row.role ?? null, row.blindCashClose ?? true)) {
         return { visible: false as const, expectedAmountCents: null };
       }
       return {
         visible: true as const,
-        expectedAmountCents: await loadExpectedCashCents(tx, ctx.businessId, session),
+        expectedAmountCents: expectedFromSums(row.openingAmountCents, row),
       };
     });
   }),

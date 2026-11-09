@@ -3,6 +3,7 @@
 // Cierre ciego: matriz rol × ajuste en getExpected, close y getZReport.
 
 import type { Database } from '@tpv/db';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import type { Context } from '../context';
 import { cashSessionRouter } from '../routers/cash-session';
@@ -69,6 +70,15 @@ function deviceCtx(bizId = BIZ_A): Context {
 
 const testRouter = router({ cashSession: cashSessionRouter });
 const createCaller = createCallerFactory(testRouter);
+
+// Fila de las tres sumas (close y getExpected comparten columnas): fondo=10000 →
+// 10000 + 2500 (efectivo) + 500 (entradas) − 1000 (salidas) = 12000 de esperado.
+const SUMS = { cashPaymentsCents: 2500, payInCents: 500, payOutCents: 1000 };
+
+// Parámetros bind de un fragmento SQL de Drizzle (para comprobar el business_id usado).
+function sqlParams(fragment: unknown): unknown[] {
+  return new PgDialect().sqlToQuery(fragment as Parameters<PgDialect['sqlToQuery']>[0]).params;
+}
 
 // ── open ────────────────────────────────────────────────────────────────────
 
@@ -174,9 +184,7 @@ describe('cashSession.close', () => {
     // counted=12010 → diff=10
     const { db, calls } = queuedDb([
       [{ id: SESSION_ID, openingAmountCents: 10000, status: 'open' }], // SELECT FOR UPDATE
-      [{ total: 2500 }], // SUM payments cash
-      [{ total: 500 }], // SUM cash_movements pay_in
-      [{ total: 1000 }], // SUM cash_movements pay_out
+      [SUMS], // una sola sentencia con las tres sumas (cobros efectivo, entradas, salidas)
       [{}], // UPDATE cashSessions
       [{ blindCashClose: true }], // SELECT businesses.blind_cash_close
       [{ role: 'manager' }], // SELECT employees.role → manager ve el esperado aunque sea ciego
@@ -201,9 +209,7 @@ describe('cashSession.close', () => {
   it('diff=0 cuando contado = esperado', async () => {
     const { db } = queuedDb([
       [{ id: SESSION_ID, openingAmountCents: 10000, status: 'open' }],
-      [{ total: 0 }],
-      [{ total: 0 }],
-      [{ total: 0 }],
+      [{ cashPaymentsCents: 0, payInCents: 0, payOutCents: 0 }],
       [{}],
       [{ blindCashClose: true }],
       [{ role: 'manager' }],
@@ -222,9 +228,7 @@ describe('cashSession.close', () => {
 function closeQueue(blind: boolean, role: string): unknown[][] {
   return [
     [{ id: SESSION_ID, openingAmountCents: 10000, status: 'open' }],
-    [{ total: 2500 }],
-    [{ total: 500 }],
-    [{ total: 1000 }],
+    [SUMS],
     [{}], // UPDATE
     [{ blindCashClose: blind }],
     [{ role }],
@@ -254,7 +258,7 @@ describe('cashSession.close — cierre ciego', () => {
 
   it('negocio no encontrado → ciego (fail-closed): worker no ve el esperado', async () => {
     const queue = closeQueue(true, 'worker');
-    queue[5] = []; // SELECT businesses → vacío
+    queue[3] = []; // SELECT businesses → vacío
     const { db } = queuedDb(queue);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.cashSession.close({ countedAmountCents: 12010 });
@@ -275,16 +279,12 @@ describe('cashSession.close — cierre ciego', () => {
 
 // ── getExpected ──────────────────────────────────────────────────────────────
 
-// Cola de getExpected: sesión → ajuste del negocio → rol → (si visible) 3 SUM.
+// getExpected es UNA sola sentencia: sesión + ajuste del negocio + rol + las tres sumas.
+function expectedRow(blind: boolean | null, role: string | null, sums = SUMS) {
+  return { openingAmountCents: 10000, blindCashClose: blind, role, ...sums };
+}
 function expectedQueue(blind: boolean, role: string): unknown[][] {
-  return [
-    [{ id: SESSION_ID, openingAmountCents: 10000 }],
-    [{ blindCashClose: blind }],
-    [{ role }],
-    [{ total: 2500 }],
-    [{ total: 500 }],
-    [{ total: 1000 }],
-  ];
+  return [[expectedRow(blind, role)]];
 }
 
 describe('cashSession.getExpected — matriz rol × ajuste', () => {
@@ -305,18 +305,90 @@ describe('cashSession.getExpected — matriz rol × ajuste', () => {
 
   it('suma en céntimos enteros con cobros en efectivo, entradas y salidas', async () => {
     const { db } = queuedDb([
-      [{ id: SESSION_ID, openingAmountCents: 10000 }],
-      [{ blindCashClose: false }],
-      [{ role: 'worker' }],
-      [{ total: '2550' }], // SUM llega como string desde Postgres
-      [{ total: '505' }],
-      [{ total: '1001' }],
+      [
+        expectedRow(false, 'worker', {
+          cashPaymentsCents: 2550,
+          payInCents: 505,
+          payOutCents: 1001,
+        }),
+      ],
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.cashSession.getExpected();
 
     expect(result?.expectedAmountCents).toBe(12054); // 10000 + 2550 + 505 − 1001
     expect(Number.isInteger(result?.expectedAmountCents)).toBe(true);
+  });
+
+  it('las tres sumas se convierten a número (Postgres devuelve SUM como texto)', async () => {
+    const { db, calls } = queuedDb(expectedQueue(false, 'worker'));
+    await createCaller({ ...deviceCtx(), db }).cashSession.getExpected();
+
+    const selectArg = calls.find((c) => c.method === 'select')?.args[0] as Record<
+      string,
+      { decoder: { mapFromDriverValue: (v: unknown) => unknown } }
+    >;
+    for (const key of ['cashPaymentsCents', 'payInCents', 'payOutCents']) {
+      expect(selectArg[key]?.decoder.mapFromDriverValue('2550')).toBe(2550);
+    }
+  });
+
+  it('usa UNA sola sentencia SELECT (antes eran 6 en serie)', async () => {
+    const { db, calls } = queuedDb(expectedQueue(true, 'manager'));
+    await createCaller({ ...deviceCtx(), db }).cashSession.getExpected();
+    expect(calls.filter((c) => c.method === 'select')).toHaveLength(1);
+  });
+
+  it('cada suma y el WHERE llevan el business_id del contexto (nunca otro)', async () => {
+    const { db, calls } = queuedDb(expectedQueue(true, 'manager'));
+    await createCaller({ ...deviceCtx(BIZ_B), db }).cashSession.getExpected();
+
+    const selectArg = calls.find((c) => c.method === 'select')?.args[0] as Record<string, unknown>;
+    for (const key of ['cashPaymentsCents', 'payInCents', 'payOutCents']) {
+      const params = sqlParams(selectArg[key]);
+      expect(params).toContain(BIZ_B);
+      expect(params).not.toContain(BIZ_A);
+    }
+    const where = calls.find((c) => c.method === 'where')?.args[0];
+    expect(sqlParams(where)).toEqual(expect.arrayContaining([BIZ_B, DEV_ID, 'open']));
+  });
+
+  it('cierre ciego: la respuesta no lleva ninguna suma ni el esperado', async () => {
+    const { db } = queuedDb(expectedQueue(true, 'worker'));
+    const result = await createCaller({ ...deviceCtx(), db }).cashSession.getExpected();
+    expect(result).toEqual({ visible: false, expectedAmountCents: null });
+  });
+
+  it('fail-closed: negocio sin fila (ajuste null) → worker no lo ve', async () => {
+    const { db } = queuedDb([[expectedRow(null, 'worker')]]);
+    const result = await createCaller({ ...deviceCtx(), db }).cashSession.getExpected();
+    expect(result?.visible).toBe(false);
+  });
+
+  it('fail-closed: empleado sin fila (rol null) con cierre ciego → no lo ve', async () => {
+    const { db } = queuedDb([[expectedRow(true, null)]]);
+    const result = await createCaller({ ...deviceCtx(), db }).cashSession.getExpected();
+    expect(result?.visible).toBe(false);
+  });
+
+  it('close y getExpected comparten columnas y dan el mismo esperado', async () => {
+    const exp = queuedDb(expectedQueue(false, 'manager'));
+    const expected = await createCaller({ ...deviceCtx(), db: exp.db }).cashSession.getExpected();
+
+    const cls = queuedDb(closeQueue(false, 'manager'));
+    const closed = await createCaller({ ...deviceCtx(), db: cls.db }).cashSession.close({
+      countedAmountCents: 12000,
+    });
+
+    expect(expected?.expectedAmountCents).toBe(12000);
+    expect(closed.expectedAmountCents).toBe(12000);
+
+    // Las dos usan cashSumsColumns: mismas claves en el SELECT de las sumas.
+    const closeSums = cls.calls.filter((c) => c.method === 'select')[1]?.args[0] as object;
+    const expSelect = exp.calls.find((c) => c.method === 'select')?.args[0] as object;
+    for (const key of Object.keys(closeSums)) {
+      expect(Object.keys(expSelect)).toContain(key);
+    }
   });
 
   it('sin sesión abierta → null', async () => {
