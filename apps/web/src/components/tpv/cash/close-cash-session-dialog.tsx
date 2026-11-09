@@ -18,7 +18,6 @@ import {
   DialogTitle,
   Input,
   Label,
-  Switch,
 } from '@tpv/ui';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -43,12 +42,21 @@ interface Mismatch {
 export function CloseCashSessionDialog({ open, onOpenChange, onSuccess }: Props) {
   const t = useTranslations('tpv.cash');
   const [countedStr, setCountedStr] = useState('');
-  const [blind, setBlind] = useState(true);
   const [mismatch, setMismatch] = useState<Mismatch | null>(null);
+  const utils = trpc.useUtils();
+
+  // Cierre ciego: lo decide el servidor según el ajuste del negocio y el rol. Si visible=false
+  // no mostramos el esperado, y tampoco avisamos del descuadre tras cerrar (delataría el esperado).
+  const { data: expected } = trpc.cashSession.getExpected.useQuery(undefined, { enabled: open });
 
   const { mutate, isPending } = trpc.cashSession.close.useMutation({
     onSuccess: (data) => {
-      if (data.differenceCents !== 0) {
+      void utils.cashSession.invalidate();
+      if (
+        data.differenceCents !== null &&
+        data.differenceCents !== 0 &&
+        data.expectedAmountCents !== null
+      ) {
         setMismatch({
           sessionId: data.sessionId,
           differenceCents: data.differenceCents,
@@ -72,7 +80,6 @@ export function CloseCashSessionDialog({ open, onOpenChange, onSuccess }: Props)
 
   const reset = () => {
     setCountedStr('');
-    setBlind(true);
     setMismatch(null);
   };
 
@@ -112,13 +119,15 @@ export function CloseCashSessionDialog({ open, onOpenChange, onSuccess }: Props)
           </DialogHeader>
 
           <div className="flex flex-col gap-4 py-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="blind-mode" className="text-sm cursor-pointer">
-                {t('closeDialog.blind')}
-              </Label>
-              <Switch id="blind-mode" checked={blind} onCheckedChange={setBlind} />
-            </div>
-            {blind && <p className="text-xs text-muted-foreground">{t('closeDialog.blindHint')}</p>}
+            {expected?.visible ? (
+              <p className="font-mono text-sm tabular-nums">
+                {t('closeDialog.expectedNow', {
+                  amount: formatCents(expected.expectedAmountCents),
+                })}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t('closeDialog.blindHint')}</p>
+            )}
 
             <div>
               <Label htmlFor="counted-amount">{t('closeDialog.counted')}</Label>

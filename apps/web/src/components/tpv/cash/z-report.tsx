@@ -17,13 +17,21 @@ function formatDate(date: string | Date): string {
 
 export function ZReport({ sessionId }: Props) {
   const t = useTranslations('tpv.cash.zReport');
-  const { data, isLoading } = trpc.cashSession.getZReport.useQuery({ sessionId });
+  // retry:false → un FORBIDDEN (informe X en cierre ciego) se muestra al instante, sin reintentos.
+  const { data, isLoading, error } = trpc.cashSession.getZReport.useQuery(
+    { sessionId },
+    { retry: false },
+  );
 
   useEffect(() => {
     if (data) {
       window.print();
     }
   }, [data]);
+
+  if (error?.data?.code === 'FORBIDDEN') {
+    return <div className="ticket-80mm no-print">{t('forbidden')}</div>;
+  }
 
   if (isLoading || !data) {
     return <div className="ticket-80mm no-print">{t('loading')}</div>;

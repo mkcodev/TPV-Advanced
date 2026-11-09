@@ -24,11 +24,14 @@ interface Props {
 export function OpenCashSessionDialog({ open, onOpenChange, onSuccess }: Props) {
   const t = useTranslations('tpv.cash');
   const [amountStr, setAmountStr] = useState('');
+  const utils = trpc.useUtils();
 
   const { mutate, isPending } = trpc.cashSession.open.useMutation({
     onSuccess: () => {
       toast.success(t('openDialog.success'));
       setAmountStr('');
+      // Refresca chip, aviso de cobro y esperado: todo cuelga de cashSession.
+      void utils.cashSession.invalidate();
       onSuccess();
     },
     onError: (err) => {

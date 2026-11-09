@@ -103,6 +103,8 @@ export function PaymentDialog({ open, onOpenChange }: PaymentDialogProps) {
 
   const { mutate, isPending } = trpc.orders.pay.useMutation({
     onSuccess: (data) => {
+      // Un cobro (parcial o total) cambia el efectivo esperado: el chip se refresca al invalidar.
+      void utils.cashSession.invalidate();
       if (data.status === 'paid') {
         // Capturar orderId antes de clear() para el reprint.
         const ticketOrderId = orderId;

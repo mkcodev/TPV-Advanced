@@ -2,6 +2,7 @@
 
 import { trpc } from '@/lib/trpc/client';
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -35,8 +36,17 @@ export function TpvCashChip() {
   const [showClose, setShowClose] = useState(false);
   const [showMovement, setShowMovement] = useState(false);
 
-  const { data: session, refetch } = trpc.cashSession.getCurrent.useQuery();
+  // Cobros y movimientos invalidan todo `cashSession` (ver payment-dialog y los diálogos de
+  // caja), así que el esperado del chip se refresca solo tras cada operación.
+  const { data: session } = trpc.cashSession.getCurrent.useQuery();
   const isOpen = session != null;
+
+  // El servidor decide si este rol puede ver el esperado (cierre ciego); si no, visible=false
+  // y el chip solo dice "Caja abierta".
+  const { data: expected } = trpc.cashSession.getExpected.useQuery(undefined, {
+    enabled: isOpen,
+  });
+  const expectedCents = expected?.visible ? expected.expectedAmountCents : null;
 
   return (
     <>
@@ -44,9 +54,11 @@ export function TpvCashChip() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={chipClass} aria-label={t('status.open')}>
-              <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
               <span className="font-medium text-foreground">
-                {t('status.open')} · {formatCents(session.openingAmountCents)}
+                {expectedCents !== null
+                  ? t('status.openWithExpected', { amount: formatCents(expectedCents) })
+                  : t('status.open')}
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -54,9 +66,13 @@ export function TpvCashChip() {
             <DropdownMenuItem onClick={() => setShowMovement(true)}>
               {t('movementAction')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openZReportWindow(session.id)}>
-              {t('zReportAction')}
-            </DropdownMenuItem>
+            {/* El informe X revela el esperado: el servidor lo bloquea en cierre ciego y aquí
+                ni se ofrece. */}
+            {expected?.visible && (
+              <DropdownMenuItem onClick={() => openZReportWindow(session.id)}>
+                {t('zReportAction')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => setShowClose(true)}
@@ -67,24 +83,15 @@ export function TpvCashChip() {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <button
-          type="button"
-          className={chipClass}
-          aria-label={t('status.closed')}
-          onClick={() => setShowOpen(true)}
-        >
-          <span className="h-2 w-2 rounded-full bg-muted-foreground" aria-hidden="true" />
-          <span className="font-medium text-foreground">{t('status.closed')}</span>
-        </button>
+        <Button type="button" size="lg" onClick={() => setShowOpen(true)}>
+          {t('openAction')}
+        </Button>
       )}
 
       <OpenCashSessionDialog
         open={showOpen}
         onOpenChange={setShowOpen}
-        onSuccess={() => {
-          setShowOpen(false);
-          refetch();
-        }}
+        onSuccess={() => setShowOpen(false)}
       />
 
       <CloseCashSessionDialog
@@ -92,7 +99,6 @@ export function TpvCashChip() {
         onOpenChange={setShowClose}
         onSuccess={(sessionId) => {
           setShowClose(false);
-          refetch();
           openZReportWindow(sessionId);
         }}
       />
@@ -100,10 +106,7 @@ export function TpvCashChip() {
       <CashMovementDialog
         open={showMovement}
         onOpenChange={setShowMovement}
-        onSuccess={() => {
-          setShowMovement(false);
-          refetch();
-        }}
+        onSuccess={() => setShowMovement(false)}
       />
     </>
   );

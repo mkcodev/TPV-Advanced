@@ -29,11 +29,14 @@ export function CashMovementDialog({ open, onOpenChange, onSuccess }: Props) {
   const [type, setType] = useState<MovementType>('pay_in');
   const [amountStr, setAmountStr] = useState('');
   const [reason, setReason] = useState('');
+  const utils = trpc.useUtils();
 
   const { mutate, isPending } = trpc.cashSession.addMovement.useMutation({
     onSuccess: () => {
       toast.success(t('movementDialog.success'));
       reset();
+      // El movimiento cambia el esperado: el chip se actualiza al invalidar.
+      void utils.cashSession.invalidate();
       onSuccess();
     },
     onError: () => {
