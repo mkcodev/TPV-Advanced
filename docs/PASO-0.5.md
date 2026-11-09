@@ -33,7 +33,7 @@ Cierra #10, #11, #12 y #13. Esquema de BD: no. Riesgo: bajo.
 | Issue | Cambio | Archivos |
 |---|---|---|
 | #10 Prefijo "Mesa" duplicado | Los textos dejan de anteponer "Mesa" y se muestra el nombre tal cual. El seed llama a las mesas "Mesa 1…4". | `apps/web/messages/es.json` (`tpv.floor.tableLabel`, `orderContext`) |
-| #11 Seed con zona y mesas | El seed crea la zona "Sala" y 4 mesas, y las regenera al repetirse. | `packages/db/scripts/seed.ts` |
+| #11 Seed con zona y mesas | El seed crea la zona "Sala" y 4 mesas ("Mesa 1…4"). Crea solo lo que falta (por nombre) y solo resetea comandas y catálogo si el negocio demo no tiene ventas: una factura o un pago impide borrar las comandas. | `packages/db/scripts/seed.ts` |
 | #12 Saludo | El saludo usa `users.full_name`; sin nombre, un saludo neutro. | `apps/web/src/app/(admin)/admin/(shell)/page.tsx`, `lib/admin/queries.server.ts`, `messages/es.json` |
 | #13 Hidratación | `BreadcrumbSeparator` pasa a ser hermano de `BreadcrumbItem`. | `apps/web/src/components/admin/shell/breadcrumbs.tsx` |
 
