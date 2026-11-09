@@ -14,7 +14,7 @@ export const deviceProcedure = businessProcedure.use(({ ctx, next }) => {
 });
 
 // Reads employee role from DB — never trust role from JWT claims.
-async function getEmployeeRole(
+export async function getEmployeeRole(
   db: Database,
   employeeId: string,
   businessId: string,

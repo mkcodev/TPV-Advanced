@@ -2,9 +2,13 @@
 // businessId, employeeId, deviceId SIEMPRE de ctx — nunca del input.
 // Los movimientos de caja son append-only: no hay endpoints update/delete.
 // El esperado se calcula en servidor con @tpv/core.computeExpectedCashCents.
+// Cierre ciego: el servidor decide quién ve el esperado (canSeeExpectedCash); el cliente
+// nunca elige. El rol sale de ctx.employeeId (PIN) leído en BD, jamás del input.
 
-import { computeDifferenceCents, computeExpectedCashCents } from '@tpv/core';
+import { canSeeExpectedCash, computeDifferenceCents, computeExpectedCashCents } from '@tpv/core';
 import {
+  type BusinessTransaction,
+  type Database,
   businesses,
   cashMovements,
   cashSessions,
@@ -20,15 +24,89 @@ import {
 } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { deviceProcedure } from '../procedures';
+import { deviceProcedure, getEmployeeRole } from '../procedures';
 import { router } from '../trpc';
+
+// Único sitio donde se agrega el efectivo de una sesión: lo usan close y getExpected,
+// así el chip y el cierre nunca pueden divergir. Todas las sumas filtran por business_id.
+async function loadExpectedCashCents(
+  tx: BusinessTransaction,
+  businessId: string,
+  session: { id: string; openingAmountCents: number },
+): Promise<number> {
+  const [cashRow] = await tx
+    .select({ total: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.businessId, businessId),
+        eq(payments.cashSessionId, session.id),
+        eq(payments.method, 'cash'),
+        eq(payments.status, 'completed'),
+      ),
+    );
+
+  const [payInRow] = await tx
+    .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
+    .from(cashMovements)
+    .where(
+      and(
+        eq(cashMovements.businessId, businessId),
+        eq(cashMovements.cashSessionId, session.id),
+        eq(cashMovements.type, 'pay_in'),
+      ),
+    );
+
+  const [payOutRow] = await tx
+    .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
+    .from(cashMovements)
+    .where(
+      and(
+        eq(cashMovements.businessId, businessId),
+        eq(cashMovements.cashSessionId, session.id),
+        eq(cashMovements.type, 'pay_out'),
+      ),
+    );
+
+  return computeExpectedCashCents({
+    openingAmountCents: session.openingAmountCents,
+    cashPaymentsCents: Number(cashRow?.total ?? 0),
+    payInCents: Number(payInRow?.total ?? 0),
+    payOutCents: Number(payOutRow?.total ?? 0),
+  });
+}
+
+// ¿Puede quien llama ver el esperado? Solo recibe ctx (nunca input del cliente):
+// ajuste del negocio (ctx.businessId) + rol del empleado que fichó con PIN (ctx.employeeId).
+// Fail-closed: negocio no encontrado => ciego; sin empleado => rol null => no lo ve.
+async function canCallerSeeExpected(
+  tx: BusinessTransaction,
+  ctx: { db: Database; businessId: string; employeeId: string | null },
+): Promise<boolean> {
+  const [biz] = await tx
+    .select({ blindCashClose: businesses.blindCashClose })
+    .from(businesses)
+    .where(eq(businesses.id, ctx.businessId))
+    .limit(1);
+  const role = ctx.employeeId
+    ? await getEmployeeRole(ctx.db, ctx.employeeId, ctx.businessId)
+    : null;
+  return canSeeExpectedCash(role, biz?.blindCashClose ?? true);
+}
 
 export const cashSessionRouter = router({
   // Devuelve la sesión 'open' del device actual, o null si no hay ninguna.
+  // Select explícito: así un campo de cuadre nuevo en la tabla no se filtra por accidente.
   getCurrent: deviceProcedure.query(async ({ ctx }) => {
     return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
       const [session] = await tx
-        .select()
+        .select({
+          id: cashSessions.id,
+          openingAmountCents: cashSessions.openingAmountCents,
+          openedAt: cashSessions.openedAt,
+          openedBy: cashSessions.openedBy,
+          status: cashSessions.status,
+        })
         .from(cashSessions)
         .where(
           and(
@@ -156,37 +234,7 @@ export const cashSessionRouter = router({
         });
       }
 
-      // Aggregate cash payments for this session.
-      const [cashRow] = await tx
-        .select({
-          total: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)`,
-        })
-        .from(payments)
-        .where(
-          and(
-            eq(payments.cashSessionId, session.id),
-            eq(payments.method, 'cash'),
-            eq(payments.status, 'completed'),
-          ),
-        );
-
-      // Aggregate pay_in and pay_out movements.
-      const [payInRow] = await tx
-        .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
-        .from(cashMovements)
-        .where(and(eq(cashMovements.cashSessionId, session.id), eq(cashMovements.type, 'pay_in')));
-
-      const [payOutRow] = await tx
-        .select({ total: sql<number>`COALESCE(SUM(${cashMovements.amountCents}), 0)` })
-        .from(cashMovements)
-        .where(and(eq(cashMovements.cashSessionId, session.id), eq(cashMovements.type, 'pay_out')));
-
-      const expectedAmountCents = computeExpectedCashCents({
-        openingAmountCents: session.openingAmountCents,
-        cashPaymentsCents: Number(cashRow?.total ?? 0),
-        payInCents: Number(payInRow?.total ?? 0),
-        payOutCents: Number(payOutRow?.total ?? 0),
-      });
+      const expectedAmountCents = await loadExpectedCashCents(tx, ctx.businessId, session);
       const differenceCents = computeDifferenceCents(input.countedAmountCents, expectedAmountCents);
 
       const now = new Date();
@@ -203,10 +251,45 @@ export const cashSessionRouter = router({
         })
         .where(and(eq(cashSessions.id, session.id), eq(cashSessions.status, 'open')));
 
+      // La BD guarda siempre los valores reales (auditoría). Solo la RESPUESTA se redacta:
+      // con cierre ciego, un worker no recibe esperado ni descuadre (ambos delatan el esperado).
+      const canSee = await canCallerSeeExpected(tx, ctx);
       return {
         sessionId: session.id,
-        expectedAmountCents,
-        differenceCents,
+        expectedAmountCents: canSee ? expectedAmountCents : null,
+        differenceCents: canSee ? differenceCents : null,
+      };
+    });
+  }),
+
+  // Efectivo esperado ahora mismo (fondo + cobros en efectivo + entradas − salidas) para el chip.
+  // null = no hay caja abierta. visible:false = cierre ciego para este rol (no se calcula nada).
+  getExpected: deviceProcedure.query(async ({ ctx }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      const [session] = await tx
+        .select({ id: cashSessions.id, openingAmountCents: cashSessions.openingAmountCents })
+        .from(cashSessions)
+        .where(
+          and(
+            eq(cashSessions.businessId, ctx.businessId),
+            eq(cashSessions.deviceId, ctx.deviceId as string),
+            eq(cashSessions.status, 'open'),
+          ),
+        )
+        .limit(1);
+
+      if (!session) return null;
+
+      if (!(await canCallerSeeExpected(tx, ctx))) {
+        return { visible: false as const, expectedAmountCents: null };
+      }
+      return {
+        visible: true as const,
+        expectedAmountCents: await loadExpectedCashCents(tx, ctx.businessId, session),
       };
     });
   }),
@@ -225,6 +308,17 @@ export const cashSessionRouter = router({
 
       if (!session) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Cash session not found' });
+      }
+
+      // Cierre ciego. Informe X (sesión abierta): con totales por método + movimientos se
+      // deduce el esperado, así que se bloquea entero. Informe Z (cerrada): el recuento ya
+      // está fijado, solo se ocultan esperado y descuadre.
+      const canSee = await canCallerSeeExpected(tx, ctx);
+      if (!canSee && session.status === 'open') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Expected cash is hidden (blind close)',
+        });
       }
 
       // Business info for the report header.
@@ -292,7 +386,9 @@ export const cashSessionRouter = router({
       const employeeMap = Object.fromEntries(employeeRows.map((e) => [e.id, e.name]));
 
       return {
-        session,
+        session: canSee
+          ? session
+          : { ...session, expectedAmountCents: null, differenceCents: null },
         business: business ?? null,
         byMethod,
         byEmployee,
