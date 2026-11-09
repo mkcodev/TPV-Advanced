@@ -76,6 +76,8 @@ describe('cashSession.open', () => {
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.cashSession.open({ openingAmountCents: 10000 });
 
+    expect(result).toBeDefined();
+    if (!result) throw new Error('expected open to return the session');
     expect(result.id).toBe(SESSION_ID);
 
     const valuesCall = calls.find((c) => c.method === 'values' && !Array.isArray(c.args[0]));
@@ -136,6 +138,8 @@ describe('cashSession.addMovement', () => {
       reason: 'Pagar repartidor',
     });
 
+    expect(result).toBeDefined();
+    if (!result) throw new Error('expected addMovement to return the movement');
     expect(result.id).toBe(MOV_ID);
 
     const valuesCall = calls.find((c) => c.method === 'values' && !Array.isArray(c.args[0]));
