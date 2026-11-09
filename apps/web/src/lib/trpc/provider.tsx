@@ -8,7 +8,11 @@ import { useState } from 'react';
 import { trpc } from './client';
 
 export function AdminTRPCProvider({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  // Igual que el TPV: 30 s sin repetir la petición al cambiar de panel. Las mutaciones
+  // invalidan lo suyo, así que los cambios propios se siguen viendo al momento.
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } }),
+  );
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
