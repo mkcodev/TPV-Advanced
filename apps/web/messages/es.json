@@ -57,6 +57,7 @@
     },
     "dashboard": {
       "greeting": "Hola, {name}",
+      "greetingNoName": "Hola",
       "subtitle": "¿Qué quieres hacer hoy?",
       "quickAccess": {
         "catalog": {

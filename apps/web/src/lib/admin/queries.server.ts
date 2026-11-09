@@ -16,6 +16,26 @@ export type AdminMembership = {
   businesses: AdminBusiness[];
 };
 
+// Nombre completo del perfil (public.users). La política RLS solo deja ver la fila propia,
+// así que hay que usar el cliente Supabase del usuario, igual que en listAdminMemberships.
+export async function getUserFullName(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('full_name')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[getUserFullName] query failed:', error);
+    return null;
+  }
+  const name = (data?.full_name as string | null | undefined)?.trim();
+  return name ? name : null;
+}
+
 // Uses the user's Supabase client (with JWT) so auth.uid() resolves correctly
 // in RLS policies. Direct drizzle connections bypass Supabase auth context.
 export async function listAdminMemberships(
