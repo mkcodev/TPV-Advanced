@@ -351,7 +351,13 @@ export const ordersRouter = router({
         if (existing.status !== 'open') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Order is not open' });
         }
-        const grew = await reconcileLines(tx, input.orderId, ctx.businessId, employeeId, input.lines);
+        const grew = await reconcileLines(
+          tx,
+          input.orderId,
+          ctx.businessId,
+          employeeId,
+          input.lines,
+        );
         await tx
           .update(orders)
           .set({

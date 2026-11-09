@@ -141,11 +141,12 @@ const tablesRouter = router({
     .query(async ({ ctx, input }) => {
       // Pagos completados de la comanda como subconsulta escalar. Referencia a mano a
       // "orders"."id": hay joins, pero así es explícito y no depende del prefijo automático.
-      const paidCents = sql<number>`(SELECT COALESCE(SUM(${payments.amountCents}), 0) FROM ${payments} WHERE ${and(
-        eq(payments.businessId, ctx.businessId),
-        eq(payments.orderId, sql.raw('"orders"."id"')),
-        eq(payments.status, 'completed'),
-      )})`.mapWith(Number);
+      const paidCents =
+        sql<number>`(SELECT COALESCE(SUM(${payments.amountCents}), 0) FROM ${payments} WHERE ${and(
+          eq(payments.businessId, ctx.businessId),
+          eq(payments.orderId, sql.raw('"orders"."id"')),
+          eq(payments.status, 'completed'),
+        )})`.mapWith(Number);
 
       const rows = await ctx.db
         .select({
@@ -200,7 +201,12 @@ const tablesRouter = router({
           };
         }
         const total = row.totalCents ?? 0;
-        return { ...row, totalCents: total, paidCents: paid, pendingCents: pendingCents(total, paid) };
+        return {
+          ...row,
+          totalCents: total,
+          paidCents: paid,
+          pendingCents: pendingCents(total, paid),
+        };
       });
     }),
 

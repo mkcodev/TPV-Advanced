@@ -10,6 +10,7 @@ import { TpvClearButton } from './tpv-clear-button';
 import { TpvOrderHydrator } from './tpv-order-hydrator';
 import { TpvOrderLines } from './tpv-order-lines';
 import { TpvOrderTotals } from './tpv-order-totals';
+import { TpvRequestBillButton } from './tpv-request-bill-button';
 import { TpvSaveOrderButton } from './tpv-save-order-button';
 import { TpvSendToKitchenButton } from './tpv-send-to-kitchen-button';
 
@@ -46,6 +47,7 @@ export function TpvOrderSidebar() {
         <div className="mt-3 flex flex-col gap-2">
           <TpvSaveOrderButton />
           <TpvSendToKitchenButton />
+          <TpvRequestBillButton />
           <Button
             variant="success"
             size="xl"
