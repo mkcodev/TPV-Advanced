@@ -352,6 +352,25 @@ export const markLinesSentSchema = z
   .strict();
 export type MarkLinesSentInput = z.infer<typeof markLinesSentSchema>;
 
+// Anular una línea ya guardada o enviada. El motivo es obligatorio. El aprobador (encargado)
+// se identifica con empleado + PIN; si quien anula ya es manager+, ambos se omiten.
+export const voidLineSchema = z
+  .object({
+    orderId: z.string().uuid(),
+    lineId: z.string().uuid(),
+    reason: z.string().trim().min(1, 'El motivo es obligatorio').max(200),
+    approverEmployeeId: z.string().uuid().optional(),
+    approverPin: z
+      .string()
+      .regex(/^\d{4,6}$/, 'PIN must be 4–6 digits')
+      .optional(),
+  })
+  .strict()
+  .refine((v) => (v.approverEmployeeId === undefined) === (v.approverPin === undefined), {
+    message: 'approverEmployeeId and approverPin must be sent together',
+  });
+export type VoidLineInput = z.infer<typeof voidLineSchema>;
+
 // Cash session schemas
 
 export const openCashSessionSchema = z
