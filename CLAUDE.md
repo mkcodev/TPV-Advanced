@@ -83,7 +83,7 @@ Primero web, empaquetar escritorio después.
 | Helper (withBusinessContext, tenant) | `packages/db/src/tenant.ts` |
 
 ### Lógica pura (`packages/core/src/`)
-`money.ts` · `order-totals.ts` (`orderTaxBreakdown`) · `payments.ts` · `cash-session.ts` (esperado, descuadre, `canSeeExpectedCash`) · `auth/` (lockout, rate-limit, pairing-code). Cada módulo con su `*.test.ts` al lado.
+`money.ts` · `order-totals.ts` (`orderTaxBreakdown`) · `payments.ts` · `cash-session.ts` (esperado, descuadre, `canSeeExpectedCash`) · `auth/` (lockout, rate-limit, pairing-code, roles: `isManagerOrAbove`, `hasActiveApprover`). Cada módulo con su `*.test.ts` al lado.
 
 ### Validadores Zod (`packages/validators/src/index.ts`)
 Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `createTableSchema`, `updateTableSchema`, `createZoneSchema`, `updateZoneSchema`, `createProductSchema`, `updateProductSchema`, `createCategorySchema`, etc.
@@ -96,11 +96,12 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts`. `listWithOpenOrders` = plano en UNA sentencia (total, pendiente, empleado) |
 | Comandas (upsert, pay, requestBill, getByTable…) | `orders.ts` | `requestBill` fija `bill_requested_at`; `upsert` lo anula si la comanda crece |
 | Auth (device pairing, PIN login) | `auth.ts` | — |
+| Empleados (list, create, update, setActive, setPin) | `employees.ts` | Todo con `panelAdminProcedure` (solo panel owner/admin, nunca un terminal). Nunca se borra: se desactiva. `setPin` también desbloquea. `pinHash` jamás sale ni se registra en eventos. Sin PIN único por negocio (login = empleado + PIN) |
 | Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol. `cashSumsColumns` es el único sitio que agrega el efectivo (una sentencia; lo usan `close` y `getExpected`) |
 | Ajustes del negocio (`blind_cash_close`) + `getName` (nombre para la cabecera del TPV) | `business.ts` | `getSettings`/`updateSettings` con `managerProcedure`; `getName` con `deviceProcedure`; ver `docs/PASO-0.5.md` |
 | Me (perfil del usuario admin) | `me.ts` | — |
 
-**Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`
+**Procedimientos / contexto:** `packages/api/src/procedures.ts` (`businessProcedure`, `managerProcedure`, `adminProcedure`, `panelAdminProcedure` = solo panel web, `deviceProcedure`) · `packages/api/src/trpc.ts` · `packages/api/src/context.ts`
 
 **Tests de routers:** `packages/api/src/__tests__/` — patrón `queuedDb` (ver `catalog-router.test.ts` como referencia).
 
@@ -130,6 +131,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Shell (sidebar, nav) | `shell/app-sidebar.tsx`, `shell/nav-group.tsx`, `shell/user-menu.tsx` |
 | Catálogo | `catalog/category-form-dialog.tsx` ⭐, `catalog/product-form-dialog.tsx`, `catalog/categories-panel.tsx`, `catalog/products-panel.tsx` |
 | Sala y mesas | `floor/zones-panel.tsx`, `floor/floor-canvas.tsx`, `floor/table-editor-item.tsx`, `floor/zone-form-dialog.tsx`, `floor/table-form-dialog.tsx` |
+| Empleados | `employees/employees-panel.tsx` (aviso "sin encargado activo"), `employees/employees-table.tsx`, `employees/employee-form-dialog.tsx`, `employees/employee-pin-dialog.tsx` |
 | Ajustes | `settings/blind-cash-close-setting.tsx` |
 
 ### Rutas Next.js (`apps/web/src/app/`)
@@ -141,6 +143,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | `/admin` — dashboard | `(admin)/admin/(shell)/page.tsx` |
 | `/admin/catalog` | `(admin)/admin/(shell)/catalog/page.tsx` |
 | `/admin/floor` | `(admin)/admin/(shell)/floor/page.tsx` |
+| `/admin/employees` — empleados y PIN | `(admin)/admin/(shell)/employees/page.tsx` |
 | `/admin/settings` — ajustes (cierre ciego) | `(admin)/admin/(shell)/settings/page.tsx` |
 | `/api/trpc/[trpc]` — handler tRPC | `api/trpc/[trpc]/route.ts` |
 
@@ -168,7 +171,8 @@ pnpm lint              # comprobación de Biome
 pnpm typecheck         # comprobación de tipos
 pnpm db:generate       # Drizzle: generar migración desde el esquema
 pnpm db:migrate        # aplicar migraciones (entorno del DATABASE_URL en .env)
-pnpm db:seed           # datos de ejemplo
+pnpm db:seed           # datos de ejemplo (solo desarrollo)
+pnpm db:bootstrap -- --email … --org … --business … --tax-id … --legal-name … --address …   # alta de un negocio REAL sin datos demo (el usuario ya debe existir en Supabase Auth)
 pnpm format            # Biome: formatear y escribir
 pnpm --filter @tpv/api test -- catalog-router   # un solo archivo de test (vitest run <patrón>)
 pnpm --filter @tpv/db test:integration          # tests RLS (requiere DB real, ver rls-isolation)

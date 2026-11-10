@@ -124,6 +124,7 @@ se indica cuál lanzar y en qué orden).
 - [ ] **E8. 🧠 Tarea 1.8** — Cobro (efectivo/tarjeta/Bizum/mixto) con S2 (billetes rápidos + cambio grande).
 - [ ] **E9. ⚡ Tarea 1.9** — Ticket y comanda de cocina imprimibles (navegador, con hueco QR).
 - [ ] **E10. ⚡ Tarea 1.10** — Empleados, login por PIN (S8 chip en líneas), ventas por empleado.
+  > Se hace como **Paso 1** (issues #34–#36): PR-1 empleados en el admin + `pnpm db:bootstrap`; PR-2 terminales; PR-3 líneas fijadas y anulación con PIN de encargado. Ventas por empleado = informe Z (`byEmployee`). Se marca al cerrar PR-3.
 - [ ] **E11. ⚡ Tarea 1.11** — Sesión de caja, cash_movements y cierre Z (con opción de cierre ciego).
 - [ ] **E12. ✅ Checkpoint Fase 1:** **instálalo en el bar de tu padre y úsalo unos días.** Apunta lo que falle o incomode y corrígelo antes de seguir. Este uso real es la validación más valiosa.
   > ⚠️ Antes de la primera venta real, verifica con tu gestor los requisitos del RD 1619/2012 (tickets correlativos, conservación).
