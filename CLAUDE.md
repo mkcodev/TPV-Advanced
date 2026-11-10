@@ -122,7 +122,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Caja / informe Z | `cash/open-cash-session-dialog.tsx`, `cash/close-cash-session-dialog.tsx`, `cash/cash-movement-dialog.tsx`, `cash/z-report.tsx`, `cash/tpv-cash-chip.tsx` |
 | Impresión (ticket simplificado, comanda cocina) | `print/invoice-ticket.tsx`, `print/kitchen-order.tsx`, `tpv-send-to-kitchen-button.tsx`, `tpv-request-bill-button.tsx` (pedir cuenta) |
 | Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx` |
-| Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx` (guardado optimista), `floor/tpv-floor-counter-button.tsx`; lógica pura en `lib/tpv/floor-state.ts` |
+| Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx` (guardado optimista), `floor/tpv-floor-counter-button.tsx`; el plano se coloca por posición (escala + mínimo táctil + hueco libre para altas) con lógica pura en `lib/floor/floor-layout.ts`; estado en `lib/tpv/floor-state.ts` |
 
 ### Componentes Admin (`apps/web/src/components/admin/`)
 | Grupo | Archivos clave |

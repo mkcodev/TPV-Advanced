@@ -126,6 +126,14 @@ Hoy `tpv-floor-view.tsx` pinta las mesas en fila (`flex flex-wrap`) e ignora `ta
 - El tamaño mínimo sale de la constante única `TABLE_MIN_SIZE_CLASS` (introducida en D2), para que el objetivo táctil de 44 px no dependa del tamaño dibujado en el admin.
 - Texto por i18n y estilos con tokens.
 
+### Decisiones de implementación (D3)
+- **Coordenadas:** px lógicos del admin, origen arriba-izquierda, rejilla `FLOOR_GRID_PX` = 10. El TPV toma la caja que envuelve las mesas y la escala (mismo factor en X e Y, tope `MAX_FLOOR_SCALE` = 2) para que quepa sin scroll, centrada. Admin sigue a 1:1.
+- **Mínimo táctil:** tras escalar, ninguna mesa baja de 128×96 px (redondas: círculo de ≥128). Crece alrededor de su centro y se encaja dentro del contenedor.
+- **Solapes:** se aceptan (no se recolocan); `layoutFloor` devuelve `overlapCount` para un posible aviso futuro en el admin.
+- **Mesas sin colocar:** si dos o más comparten posición exacta, la zona usa la lista de siempre + aviso `tpv.floor.unplacedHint`.
+- **Altas en el admin:** `nextFreePosition` busca el primer hueco de la rejilla (filas de izquierda a derecha) usando la huella táctil del TPV, en vez de (20,20) siempre.
+- Código: `apps/web/src/lib/floor/floor-layout.ts` (+ test).
+
 ## Orden y flujo
 
 Orden: A → B → C → D1 → D2 → D3. Va de menor a mayor riesgo; C y D son independientes entre sí.
