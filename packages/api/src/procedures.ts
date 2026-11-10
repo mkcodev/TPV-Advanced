@@ -102,5 +102,6 @@ export const panelAdminProcedure = adminProcedure.use(({ ctx, next }) => {
   if (ctx.auth.kind !== 'admin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin panel access required' });
   }
-  return next({ ctx });
+  // Se pasa el auth ya estrechado: los handlers ven kind 'admin' y pueden usar auth.userId.
+  return next({ ctx: { ...ctx, auth: ctx.auth } });
 });

@@ -43,7 +43,7 @@
       "orders": "Comandas",
       "cashbox": "Caja",
       "employees": "Empleados",
-      "devices": "Dispositivos",
+      "devices": "Terminales",
       "inventory": "Inventario",
       "customers": "Clientes",
       "reports": "Informes",
@@ -157,6 +157,66 @@
         "deactivated": "Empleado desactivado",
         "pinChanged": "PIN cambiado",
         "error": "No se pudo guardar el empleado"
+      }
+    },
+    "devices": {
+      "title": "Terminales",
+      "subtitle": "Cajas y tablets vinculadas a este negocio.",
+      "pair": "Vincular terminal",
+      "empty": "No hay terminales vinculados todavía",
+      "emptyCta": "Vincula el primer terminal",
+      "loadError": "No se pudieron cargar los terminales",
+      "types": {
+        "pos_terminal": "Caja (TPV)",
+        "waiter_tablet": "Tablet de camarero",
+        "kds": "Pantalla de cocina",
+        "printer": "Impresora"
+      },
+      "status": {
+        "active": "Activo",
+        "revoked": "Revocado"
+      },
+      "lastSeen": {
+        "never": "Nunca",
+        "now": "Hace unos segundos",
+        "minutes": "Hace {count, plural, one {# minuto} other {# minutos}}",
+        "hours": "Hace {count, plural, one {# hora} other {# horas}}",
+        "days": "Hace {count, plural, one {# día} other {# días}}"
+      },
+      "columns": {
+        "name": "Nombre",
+        "type": "Tipo",
+        "status": "Estado",
+        "lastSeen": "Visto",
+        "actions": "Acciones"
+      },
+      "actions": {
+        "revoke": "Revocar terminal"
+      },
+      "pairDialog": {
+        "title": "Vincular terminal",
+        "description": "Genera un código de un solo uso y escríbelo en el terminal nuevo.",
+        "fields": {
+          "name": "Nombre del terminal",
+          "namePlaceholder": "Ej: Caja barra",
+          "type": "Tipo"
+        },
+        "generate": "Generar código",
+        "codeLabel": "Código de vinculación",
+        "codeHelp": "Escríbelo en el terminal, en la pantalla de vincular de /tpv. Sirve una sola vez.",
+        "expiresIn": "Caduca en {time}",
+        "expired": "El código ha caducado",
+        "another": "Generar otro",
+        "done": "Hecho"
+      },
+      "revoke": {
+        "title": "Revocar {name}",
+        "description": "El terminal dejará de funcionar de inmediato y habrá que vincularlo de nuevo. Si tiene la caja abierta, la sesión de caja seguirá abierta y no se podrá cerrar desde ese terminal.",
+        "confirm": "Revocar"
+      },
+      "toast": {
+        "revoked": "Terminal revocado",
+        "error": "No se pudo completar la operación"
       }
     },
     "floor": {
@@ -522,6 +582,7 @@
         "devTokenTitle": "Modo desarrollo — pegar token directamente",
         "devTokenLabel": "Device token",
         "devTokenSubmit": "Usar token",
+        "devTokenPlaceholder": "Pegar el token del seed aquí…",
         "success": "Terminal emparejado correctamente",
         "errors": {
           "invalidCode": "Código no válido o caducado",

@@ -77,7 +77,7 @@ export function DevicePairingScreen() {
                 setError(null);
               }}
               placeholder={t('codePlaceholder')}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-center text-2xl tracking-[0.5em] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-center text-2xl tracking-widest text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               aria-describedby={error ? 'pairing-error' : undefined}
               autoComplete="off"
             />
@@ -92,7 +92,7 @@ export function DevicePairingScreen() {
           <button
             type="submit"
             disabled={pairMutation.isPending || code.length < 6}
-            className="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 hover:opacity-90 active:opacity-80 min-h-[44px]"
+            className="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 hover:opacity-90 active:opacity-80 min-h-11"
           >
             {pairMutation.isPending ? t('submitting') : t('submit')}
           </button>
@@ -114,12 +114,12 @@ export function DevicePairingScreen() {
                 value={devToken}
                 onChange={(e) => setDevToken(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                placeholder="Pegar el token del seed aquí…"
+                placeholder={t('devTokenPlaceholder')}
               />
               <button
                 type="submit"
                 disabled={!devToken.trim()}
-                className="w-full rounded-md border border-border px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 min-h-[44px]"
+                className="w-full rounded-md border border-border px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 min-h-11"
               >
                 {t('devTokenSubmit')}
               </button>
