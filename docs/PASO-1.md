@@ -1,5 +1,7 @@
 # Paso 1 — Instalar el TPV en un bar real sin seed
 
+> **Estado:** PR-1 (#39, empleados + `db:bootstrap`) mergeado. PR-2 (#35, terminales) en curso. PR-3 (#36, líneas fijadas + anulación con PIN de encargado) pendiente. Este documento es el plan aprobado; las desviaciones se anotan en cada PR.
+
 ## Contexto
 
 `main` en 43e4888 (Paso 0.5 cerrado). Hoy solo se puede usar el TPV con `pnpm db:seed`: no hay alta de negocio, ni gestión de empleados, ni de terminales en el admin, y la anulación de líneas no tiene control de rol. Objetivo: que el dueño monte el bar desde cero (negocio → empleados → vincular terminal) y que las acciones sensibles se validen en servidor.

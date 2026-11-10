@@ -10,7 +10,7 @@ Un terminal (caja, tablet de camarero, KDS) debe **emparejarse** con un negocio 
 
 ### Flujo de emparejamiento
 
-1. El administrador (rol `admin` u `owner`) accede al panel web y genera un **código de emparejamiento** de un solo uso (6–8 dígitos, caduca en 15 minutos).
+1. El administrador (owner/admin del **panel web**; un terminal no puede) abre `/admin/devices` y genera un **código de emparejamiento** de un solo uso (8 dígitos, caduca en 15 minutos). El panel muestra el código con cuenta atrás.
 2. En el terminal nuevo, se introduce el código de emparejamiento.
 3. El servidor valida el código → crea una fila en `devices` con el `business_id` del admin → devuelve un **token de dispositivo** persistente.
 4. El token se almacena de forma segura en el dispositivo (keychain en Electron, `localStorage` cifrado en PWA).
@@ -18,7 +18,10 @@ Un terminal (caja, tablet de camarero, KDS) debe **emparejarse** con un negocio 
 
 **Reglas:**
 - El token de dispositivo no expira automáticamente (vida útil del hardware), pero el admin puede revocarlo desde el panel en cualquier momento.
-- Un código de emparejamiento solo puede usarse una vez.
+- Un código de emparejamiento solo puede usarse una vez: el canje es un `UPDATE ... WHERE id = (SELECT ... LIMIT 1 FOR UPDATE SKIP LOCKED)`, atómico y de una sola fila.
+- Al generar un código se comprueba que no coincida con otro activo (de cualquier negocio): `pairDevice` busca el código sin negocio, así que serían ambiguos. Se regenera hasta 3 veces. (Comprobar+insertar no es atómico; con 10^8 códigos el riesgo es despreciable. Un índice único parcial lo cerraría del todo si hiciera falta.)
+- Revocar (`/admin/devices`) anula el hash del token y desactiva el terminal; la siguiente petición del terminal cae en `anonymous` y el TPV vuelve a la pantalla de vincular. No cierra la sesión de caja que tuviera abierta: el panel avisa.
+- El modo "pegar token" de la pantalla de vincular solo existe en desarrollo (`NODE_ENV === 'development'`).
 - El `business_id` **nunca** se acepta como parámetro del cliente; siempre se deriva del token del dispositivo.
 
 ---

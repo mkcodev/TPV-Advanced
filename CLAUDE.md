@@ -95,7 +95,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Catálogo (categorías + productos) | `catalog.ts` | ⭐ patrón de referencia para routers nuevos |
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts`. `listWithOpenOrders` = plano en UNA sentencia (total, pendiente, empleado) |
 | Comandas (upsert, pay, requestBill, getByTable…) | `orders.ts` | `requestBill` fija `bill_requested_at`; `upsert` lo anula si la comanda crece |
-| Auth (device pairing, PIN login) | `auth.ts` | — |
+| Auth (device pairing, PIN login, terminales) | `auth.ts` | `createPairingCode`, `listDevices`, `revokeDevice` con `panelAdminProcedure`. Códigos de 8 dígitos, 15 min, un solo uso; se regeneran si chocan con uno activo. `pairDevice` reclama UNA fila (`FOR UPDATE SKIP LOCKED`). `listDevices` nunca expone `deviceTokenHash` |
 | Empleados (list, create, update, setActive, setPin) | `employees.ts` | Todo con `panelAdminProcedure` (solo panel owner/admin, nunca un terminal). Nunca se borra: se desactiva. `setPin` también desbloquea. `pinHash` jamás sale ni se registra en eventos. Sin PIN único por negocio (login = empleado + PIN) |
 | Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol. `cashSumsColumns` es el único sitio que agrega el efectivo (una sentencia; lo usan `close` y `getExpected`) |
 | Ajustes del negocio (`blind_cash_close`) + `getName` (nombre para la cabecera del TPV) | `business.ts` | `getSettings`/`updateSettings` con `managerProcedure`; `getName` con `deviceProcedure`; ver `docs/PASO-0.5.md` |
@@ -131,6 +131,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Shell (sidebar, nav) | `shell/app-sidebar.tsx`, `shell/nav-group.tsx`, `shell/user-menu.tsx` |
 | Catálogo | `catalog/category-form-dialog.tsx` ⭐, `catalog/product-form-dialog.tsx`, `catalog/categories-panel.tsx`, `catalog/products-panel.tsx` |
 | Sala y mesas | `floor/zones-panel.tsx`, `floor/floor-canvas.tsx`, `floor/table-editor-item.tsx`, `floor/zone-form-dialog.tsx`, `floor/table-form-dialog.tsx` |
+| Terminales | `devices/devices-panel.tsx`, `devices/devices-table.tsx`, `devices/pairing-code-dialog.tsx` (código + cuenta atrás con `ttlMs`), `devices/revoke-device-dialog.tsx` |
 | Empleados | `employees/employees-panel.tsx` (aviso "sin encargado activo"), `employees/employees-table.tsx`, `employees/employee-form-dialog.tsx`, `employees/employee-pin-dialog.tsx` |
 | Ajustes | `settings/blind-cash-close-setting.tsx` |
 
@@ -144,6 +145,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | `/admin/catalog` | `(admin)/admin/(shell)/catalog/page.tsx` |
 | `/admin/floor` | `(admin)/admin/(shell)/floor/page.tsx` |
 | `/admin/employees` — empleados y PIN | `(admin)/admin/(shell)/employees/page.tsx` |
+| `/admin/devices` — terminales (vincular, revocar) | `(admin)/admin/(shell)/devices/page.tsx` |
 | `/admin/settings` — ajustes (cierre ciego) | `(admin)/admin/(shell)/settings/page.tsx` |
 | `/api/trpc/[trpc]` — handler tRPC | `api/trpc/[trpc]/route.ts` |
 
