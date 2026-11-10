@@ -8,6 +8,7 @@ import { lineTotalCents, orderTaxBreakdown } from '@tpv/core';
 // Tamaño mínimo táctil de una mesa (≥44 px) en UN solo sitio. En PR-D3 (plano por posición)
 // el contenedor posicionado manda sobre el tamaño dibujado en el admin, y esta constante
 // sigue siendo el suelo: ninguna mesa baja de aquí aunque se dibuje pequeña.
+// Sus equivalentes en px (128×96) viven en lib/floor/floor-layout.ts; un test los mantiene a la par.
 export const TABLE_MIN_SIZE_CLASS = 'min-h-24 min-w-32';
 
 export type TableVisualState = 'free' | 'occupied' | 'billing';

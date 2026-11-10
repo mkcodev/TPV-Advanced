@@ -57,7 +57,8 @@ export function TpvFloorZoneTabs() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      {/* `relative`: el plano por posición se coloca con `absolute inset-4` dentro de este hueco. */}
+      <div className="relative flex-1 overflow-y-auto">
         {currentZoneId !== null && (
           <TpvFloorView
             zoneId={currentZoneId}

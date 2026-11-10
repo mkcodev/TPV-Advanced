@@ -4,7 +4,7 @@ import { trpc } from '@/lib/trpc/client';
 import { Button } from '@tpv/ui';
 import { Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { TableEditorItem } from './table-editor-item';
 import { TableFormDialog } from './table-form-dialog';
@@ -14,6 +14,19 @@ type Props = { zoneId: string | null };
 export function FloorCanvas({ zoneId }: Props) {
   const t = useTranslations('admin.floor');
   const [newOpen, setNewOpen] = useState(false);
+
+  // Ancho real del lienzo: las mesas nuevas saltan de fila al llegar a este borde.
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number | undefined>(undefined);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: el lienzo solo existe con zona elegida; se re-observa al cambiar de zona
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (el === null) return;
+    setCanvasWidth(el.clientWidth);
+    const observer = new ResizeObserver(() => setCanvasWidth(el.clientWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [zoneId]);
 
   const { data, refetch } = trpc.floor.tables.listByZone.useQuery(
     { zoneId: zoneId ?? '' },
@@ -40,6 +53,7 @@ export function FloorCanvas({ zoneId }: Props) {
       </div>
 
       <div
+        ref={canvasRef}
         className="relative flex-1 rounded-lg border border-border bg-muted/30 overflow-hidden"
         style={{ minHeight: 480 }}
       >
@@ -67,6 +81,8 @@ export function FloorCanvas({ zoneId }: Props) {
         open={newOpen}
         onClose={() => setNewOpen(false)}
         zoneId={zoneId}
+        existingTables={tables}
+        canvasWidth={canvasWidth}
         onSuccess={() => {
           setNewOpen(false);
           void refetch();

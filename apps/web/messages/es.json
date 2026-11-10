@@ -394,6 +394,7 @@
     },
     "floor": {
       "title": "Plano de sala",
+      "unplacedHint": "Mesas sin colocar: ordénalas en Admin › Sala para ver el plano",
       "counter": "Venta rápida barra",
       "counterHint": "Sin mesa asignada",
       "backToFloor": "Volver al plano",
