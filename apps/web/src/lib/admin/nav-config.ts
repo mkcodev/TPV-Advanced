@@ -81,7 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
         labelKey: 'devices',
         href: '/admin/devices',
         icon: MonitorSmartphone,
-        status: 'soon',
+        status: 'ready',
         minRole: 'admin',
       },
       {
