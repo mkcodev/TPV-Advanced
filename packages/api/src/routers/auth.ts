@@ -1,4 +1,5 @@
 import {
+  PAIRING_CODE_TTL_MS,
   applyPinFailure,
   applyPinSuccess,
   checkLockout,
@@ -14,16 +15,17 @@ import {
   revokeDeviceSchema,
 } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
-import { and, eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { logAuthEvent } from '../auth/events';
 import { DUMMY_HASH_PROMISE, verifyPin } from '../auth/pin';
 import { consumeRateLimit } from '../auth/rate-limit-store';
 import { signEmployeeSession } from '../auth/session';
 import { generateDeviceToken, sha256Base64Url } from '../auth/tokens';
 import { getServerEnv } from '../env';
-import { adminProcedure, deviceProcedure } from '../procedures';
+import { deviceProcedure, panelAdminProcedure } from '../procedures';
 import { publicProcedure, router } from '../trpc';
+
+const MAX_CODE_ATTEMPTS = 3;
 
 // Uses Web Crypto (available in Node.js 19+ and all Edge runtimes).
 function secureRandomInt(max: number): number {
@@ -34,20 +36,39 @@ function secureRandomInt(max: number): number {
 
 export const authRouter = router({
   // Admin generates a one-time pairing code that the terminal redeems.
-  createPairingCode: adminProcedure
+  // Solo el panel (panelAdminProcedure): pairing_codes.created_by es FK a users.id,
+  // y un terminal no tiene users.id.
+  createPairingCode: panelAdminProcedure
     .input(createPairingCodeSchema)
     .mutation(async ({ ctx, input }) => {
-      const code = generatePairingCode(secureRandomInt);
-      const expiresAt = pairingCodeExpiresAt(new Date());
+      const now = new Date();
 
-      // Only Supabase admin users can create pairing codes — employees.id is not a
-      // valid FK to users.id and the device path has no stable users.id at all.
-      if (ctx.auth.kind !== 'admin') {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'device terminals cannot create pairing codes',
-        });
+      // pairDevice busca el código SIN negocio (el terminal aún no tiene ninguno), así que dos
+      // códigos activos iguales de negocios distintos serían ambiguos. Se regenera si choca.
+      // (Comprobar+insertar no es atómico; con 10^8 códigos y pocos activos el riesgo es
+      // despreciable, y pairDevice reclama una sola fila de todos modos.)
+      let code = '';
+      for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+        const candidate = generatePairingCode(secureRandomInt);
+        const clash = await ctx.db
+          .select({ id: pairingCodes.id })
+          .from(pairingCodes)
+          .where(
+            and(
+              eq(pairingCodes.code, candidate),
+              isNull(pairingCodes.usedAt),
+              gt(pairingCodes.expiresAt, now),
+            ),
+          )
+          .limit(1);
+        if (clash.length === 0) {
+          code = candidate;
+          break;
+        }
       }
+      if (!code) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+      const expiresAt = pairingCodeExpiresAt(now);
 
       await ctx.db.insert(pairingCodes).values({
         businessId: ctx.businessId,
@@ -64,8 +85,26 @@ export const authRouter = router({
         payload: { name: input.name, type: input.type },
       });
 
-      return { code, expiresAt };
+      // ttlMs permite al panel contar atrás con su propio reloj (sin depender de que el
+      // reloj del navegador coincida con el del servidor).
+      return { code, expiresAt, ttlMs: PAIRING_CODE_TTL_MS };
     }),
+
+  // Admin lists the business terminals. Never exposes deviceTokenHash.
+  listDevices: panelAdminProcedure.query(async ({ ctx }) =>
+    ctx.db
+      .select({
+        id: devices.id,
+        name: devices.name,
+        type: devices.type,
+        isActive: devices.isActive,
+        lastSeenAt: devices.lastSeenAt,
+        createdAt: devices.createdAt,
+      })
+      .from(devices)
+      .where(eq(devices.businessId, ctx.businessId))
+      .orderBy(desc(devices.createdAt)),
+  ),
 
   // Terminal redeems a pairing code and receives a persistent device token.
   pairDevice: publicProcedure.input(pairDeviceSchema).mutation(async ({ ctx, input }) => {
@@ -78,12 +117,20 @@ export const authRouter = router({
 
     // Atomic claim: UPDATE returns 0 rows if code is wrong, expired, or already used.
     // This prevents both double-redemption and SELECT+UPDATE race conditions.
+    // El subselect elige UNA sola fila (la más antigua) y la bloquea: aunque dos códigos
+    // activos coincidieran, solo se consume uno y el terminal nunca queda ligado a dos negocios.
     const claimed = (await ctx.db.execute(sql`
       UPDATE pairing_codes
       SET used_at = now()
-      WHERE code = ${input.code}
-        AND used_at IS NULL
-        AND expires_at > now()
+      WHERE id = (
+        SELECT id FROM pairing_codes
+        WHERE code = ${input.code}
+          AND used_at IS NULL
+          AND expires_at > now()
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
       RETURNING business_id, device_name, device_type, created_by
     `)) as { business_id: string; device_name: string; device_type: string; created_by: string }[];
 
@@ -234,7 +281,7 @@ export const authRouter = router({
   }),
 
   // Admin revokes a device — clears its token hash and marks it inactive.
-  revokeDevice: adminProcedure.input(revokeDeviceSchema).mutation(async ({ ctx, input }) => {
+  revokeDevice: panelAdminProcedure.input(revokeDeviceSchema).mutation(async ({ ctx, input }) => {
     const [device] = await ctx.db
       .update(devices)
       .set({ deviceTokenHash: null, isActive: false })
