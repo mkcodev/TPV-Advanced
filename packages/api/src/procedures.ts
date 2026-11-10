@@ -1,3 +1,4 @@
+import { isManagerOrAbove } from '@tpv/core';
 import { businesses, employees, memberships, organizations } from '@tpv/db';
 import type { Database, EmployeeRole, MembershipRole } from '@tpv/db';
 import { TRPCError } from '@trpc/server';
@@ -60,7 +61,7 @@ export const managerProcedure = businessProcedure.use(async ({ ctx, next }) => {
       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
     }
     const role = await getEmployeeRole(ctx.db, ctx.employeeId, ctx.businessId);
-    if (role !== 'manager' && role !== 'admin') {
+    if (!isManagerOrAbove(role)) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Manager role required' });
     }
   } else if (ctx.auth.kind === 'admin') {
@@ -91,6 +92,15 @@ export const adminProcedure = businessProcedure.use(async ({ ctx, next }) => {
     }
   } else {
     throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
+  return next({ ctx });
+});
+
+// Solo el panel web (owner/admin de la organización). Un terminal NUNCA entra,
+// ni siquiera con un empleado de rol admin: gestionar personal y terminales es cosa del dueño.
+export const panelAdminProcedure = adminProcedure.use(({ ctx, next }) => {
+  if (ctx.auth.kind !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin panel access required' });
   }
   return next({ ctx });
 });
