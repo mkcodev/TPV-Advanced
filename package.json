@@ -14,6 +14,7 @@
     "db:generate": "pnpm --filter @tpv/db db:generate",
     "db:migrate": "pnpm --filter @tpv/db db:migrate",
     "db:seed": "pnpm --filter @tpv/db db:seed",
+    "db:bootstrap": "pnpm --filter @tpv/db db:bootstrap",
     "db:setup-storage": "pnpm --filter @tpv/db db:setup-storage"
   },
   "devDependencies": {

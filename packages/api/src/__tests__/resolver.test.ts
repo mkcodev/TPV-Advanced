@@ -7,14 +7,30 @@ import { sha256Base64Url } from '../auth/tokens';
 
 const SESSION_SECRET = 'test-secret-that-is-long-enough-for-hs256';
 
-// Minimal DB stub that simulates a device lookup by token hash.
-function makeDb(device: { id: string; businessId: string } | null): Database {
+// Minimal DB stub for the device path. The resolver runs ONE query:
+// devices LEFT JOIN employees (active + same business). `activeEmployeeId` is what that
+// join would return: the employee id when active, null when inactive / other business.
+function makeDb(
+  device: { id: string; businessId: string } | null,
+  activeEmployeeId: string | null = null,
+): Database {
   return {
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: () =>
-            Promise.resolve(device ? [{ ...device, isActive: true, deviceTokenHash: '' }] : []),
+        leftJoin: () => ({
+          where: () => ({
+            limit: () =>
+              Promise.resolve(
+                device
+                  ? [
+                      {
+                        device: { ...device, isActive: true, deviceTokenHash: '' },
+                        activeEmployeeId,
+                      },
+                    ]
+                  : [],
+              ),
+          }),
         }),
       }),
     }),
@@ -85,7 +101,7 @@ describe('createAuthResolver', () => {
   });
 
   it('extracts employeeId from a valid x-employee-session', async () => {
-    const db = makeDb(VALID_DEVICE);
+    const db = makeDb(VALID_DEVICE, 'emp-1');
     const resolver = createAuthResolver({
       db,
       sessionSecret: SESSION_SECRET,
@@ -104,7 +120,7 @@ describe('createAuthResolver', () => {
   });
 
   it('ignores employee session when deviceId does not match', async () => {
-    const db = makeDb(VALID_DEVICE);
+    const db = makeDb(VALID_DEVICE, 'emp-1');
     const resolver = createAuthResolver({
       db,
       sessionSecret: SESSION_SECRET,
@@ -118,6 +134,46 @@ describe('createAuthResolver', () => {
     const headers = new Headers({
       'x-device-token': VALID_DEVICE_TOKEN,
       'x-employee-session': sessionToken,
+    });
+    const result = await resolver.resolveAuth({ headers });
+    expect(result).toMatchObject({ kind: 'device', employeeId: null });
+  });
+
+  it('drops the session when the employee is deactivated or belongs to another business', async () => {
+    // The join finds no active employee of THIS business => activeEmployeeId null.
+    const db = makeDb(VALID_DEVICE, null);
+    const resolver = createAuthResolver({
+      db,
+      sessionSecret: SESSION_SECRET,
+      verifySupabaseJwt: noopJwtVerifier,
+    });
+    const sessionToken = await signEmployeeSession(
+      { employeeId: 'emp-1', deviceId: VALID_DEVICE.id },
+      SESSION_SECRET,
+    );
+    const headers = new Headers({
+      'x-device-token': VALID_DEVICE_TOKEN,
+      'x-employee-session': sessionToken,
+    });
+    const result = await resolver.resolveAuth({ headers });
+    expect(result).toEqual({
+      kind: 'device',
+      deviceId: VALID_DEVICE.id,
+      businessId: VALID_DEVICE.businessId,
+      employeeId: null,
+    });
+  });
+
+  it('ignores a tampered employee session even if the join returned an employee', async () => {
+    const db = makeDb(VALID_DEVICE, 'emp-1');
+    const resolver = createAuthResolver({
+      db,
+      sessionSecret: SESSION_SECRET,
+      verifySupabaseJwt: noopJwtVerifier,
+    });
+    const headers = new Headers({
+      'x-device-token': VALID_DEVICE_TOKEN,
+      'x-employee-session': 'not.a.jwt',
     });
     const result = await resolver.resolveAuth({ headers });
     expect(result).toMatchObject({ kind: 'device', employeeId: null });

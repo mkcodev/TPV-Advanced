@@ -37,6 +37,14 @@ Una vez el dispositivo está emparejado, el empleado se autentica con su PIN.
 
 > **Por qué verificar en servidor y no en cliente:** hashear en cliente no aporta seguridad real (el hash se puede reutilizar) y dificulta el lockout centralizado. La conexión es HTTPS y la red local es de confianza.
 
+### Gestión de empleados y unicidad del PIN
+
+- Los empleados se crean, editan, desactivan y cambian de PIN **solo desde el panel** (`/admin/employees`, `panelAdminProcedure`: owner/admin de la organización). Un terminal nunca gestiona personal, ni siquiera con un empleado de rol `admin`.
+- **Nunca se borran:** hay ventas y `system_events` que los referencian. Desactivar saca al empleado del selector y corta su sesión PIN en la siguiente petición (el resolver exige empleado activo y del mismo negocio).
+- **No se impone PIN único por negocio.** El login es "elige empleado + PIN": el PIN solo se valida contra el hash de ese empleado. Además el hash lleva sal, así que no existe un índice UNIQUE posible; comprobarlo exigiría verificar el PIN contra todos los hashes del negocio.
+- Cambiar el PIN resetea `failed_pin_attempts` y `locked_until` (también sirve para desbloquear).
+- Si no queda ningún manager/admin activo, el panel avisa: nadie podría autorizar anulaciones.
+
 ### Lockout tras intentos fallidos
 
 ```

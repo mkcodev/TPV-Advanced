@@ -74,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         labelKey: 'employees',
         href: '/admin/employees',
         icon: Users,
-        status: 'soon',
+        status: 'ready',
         minRole: 'admin',
       },
       {
