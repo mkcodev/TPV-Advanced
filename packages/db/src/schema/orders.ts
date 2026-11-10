@@ -159,7 +159,7 @@ export const orderItems = pgTable(
     course: text('course').$type<OrderItemCourse>(),
     notes: text('notes'), // ej. "poco hecho"
     status: text('status').$type<OrderItemStatus>().default('pending').notNull(),
-    voidedReason: text('voided_reason'), // obligatorio si status='cancelled' — se valida en app
+    voidedReason: text('voided_reason'), // obligatorio si status='cancelled' (CHECK order_items_voided_check)
     // Anular línea ya enviada a cocina requiere rol manager+ y escribe order_events.
     voidedBy: uuid('voided_by').references(() => employees.id),
     sentToKitchenAt: timestamp('sent_to_kitchen_at', { withTimezone: true }),
@@ -173,6 +173,11 @@ export const orderItems = pgTable(
     index('order_items_order_status_idx').on(t.orderId, t.status), // KDS
     check('order_items_status_check', inEnum(t.status, ORDER_ITEM_STATUSES)),
     check('order_items_quantity_check', sql`${t.quantity} > 0`),
+    // Una línea anulada siempre lleva motivo y quién la autorizó (orders.voidLine los rellena).
+    check(
+      'order_items_voided_check',
+      sql`${t.status} <> 'cancelled' OR (${t.voidedReason} IS NOT NULL AND ${t.voidedBy} IS NOT NULL)`,
+    ),
     // Hija sin business_id: hereda el acceso de la comanda padre.
     selectPolicy(
       'order_items',
