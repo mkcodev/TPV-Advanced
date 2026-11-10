@@ -13,6 +13,20 @@ export interface OrderLine {
   imageUrl: string | null;
   quantity: number;
   notes?: string;
+  // Solo en líneas que el servidor ya conoce (guardadas). Una línea guardada está FIJADA:
+  // no se puede quitar ni bajar de savedQuantity; solo anular con orders.voidLine.
+  // 'sent' = ya enviada a cocina: no admite más unidades (lo nuevo va en otra línea).
+  status?: 'pending' | 'sent';
+  savedQuantity?: number;
+}
+
+// Línea anulada (viene del servidor). No cuenta en totales; se muestra tachada con su motivo.
+export interface VoidedLine {
+  id: string;
+  name: string;
+  quantity: number;
+  lineTotalCents: number;
+  reason: string;
 }
 
 export interface ProductForAdd {
@@ -56,6 +70,8 @@ export interface ServerOrder {
     quantity: number;
     lineTotalCents: number;
     notes: string | null;
+    status?: string;
+    voidedReason?: string | null;
   }>;
 }
 
@@ -66,6 +82,7 @@ export type SessionKeyString = 'counter' | `table:${string}`;
 
 interface OrderSession {
   lines: OrderLine[];
+  voidedLines: VoidedLine[];
   orderId: string | null;
   savedOrderNumber: number | null;
   savedTotals: SavedTotals | null;
@@ -79,6 +96,7 @@ interface OrderSession {
 
 const EMPTY_SESSION: OrderSession = {
   lines: [],
+  voidedLines: [],
   orderId: null,
   savedOrderNumber: null,
   savedTotals: null,
@@ -109,7 +127,13 @@ interface OrderState extends OrderSession {
   countForProduct: (productId: string) => number;
   getBreakdown: () => OrderTaxBreakdown;
   ensureOrderId: () => string;
+  // Fusiona la respuesta del servidor con la sesión ACTIVA (ver mergeServerOrder).
   hydrateFromServer: (order: ServerOrder) => void;
+  // Igual, pero para la sesión de una clave concreta (activa o aparcada): el guardado en
+  // segundo plano al volver al plano termina cuando ya puede haber otra mesa activa.
+  applyServerOrder: (key: SessionKeyString | null, order: ServerOrder) => void;
+  // Tras enviar a cocina: las líneas pasan a 'sent' sin esperar a otra lectura.
+  markLinesSent: (lineIds: string[]) => void;
   shouldHydrateFromServer: () => boolean;
   // True when on a table with no local orderId/lines — should try getByTable.
   shouldFetchOpenByTable: () => boolean;
@@ -122,9 +146,87 @@ interface OrderState extends OrderSession {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Una línea guardada en el servidor está fijada.
+export function isLineLocked(line: OrderLine): boolean {
+  return line.savedQuantity !== undefined;
+}
+
+// Une lo que dice el servidor con lo que hay en pantalla:
+// - Las líneas del servidor mandan (nombre/precio son snapshot) pero conservan el orden local
+//   y los datos de pintado (categoría, imagen) que el servidor no devuelve.
+// - Una línea pendiente puede llevar más unidades locales sin guardar: se respetan.
+// - Las líneas locales aún no guardadas (añadidas mientras volaba la petición) se conservan.
+// - Las anuladas salen de `lines` y van a `voidedLines`.
+function mergeServerOrder(session: OrderSession, order: ServerOrder): OrderSession {
+  const localById = new Map(session.lines.map((l) => [l.id, l]));
+  const displayByProduct = new Map<string, OrderLine>();
+  for (const l of session.lines) {
+    if (l.categoryId && !displayByProduct.has(l.productId)) displayByProduct.set(l.productId, l);
+  }
+
+  const toLine = (sl: ServerOrder['lines'][number]): OrderLine => {
+    const local = localById.get(sl.id);
+    const display = local ?? displayByProduct.get(sl.productId ?? '');
+    const status = sl.status === undefined || sl.status === 'pending' ? 'pending' : 'sent';
+    return {
+      id: sl.id,
+      productId: sl.productId ?? '',
+      name: sl.nameSnapshot,
+      unitPriceCents: sl.unitPriceCents,
+      taxRate: sl.taxRate,
+      categoryId: display?.categoryId ?? '',
+      categoryColor: display?.categoryColor ?? null,
+      imageUrl: display?.imageUrl ?? null,
+      quantity: status === 'pending' ? Math.max(sl.quantity, local?.quantity ?? 0) : sl.quantity,
+      notes: sl.notes ?? undefined,
+      status,
+      savedQuantity: sl.quantity,
+    };
+  };
+
+  const active = order.lines.filter((l) => l.status !== 'cancelled');
+  const activeById = new Map(active.map((l) => [l.id, l]));
+  const allServerIds = new Set(order.lines.map((l) => l.id));
+
+  const ordered: OrderLine[] = [];
+  for (const local of session.lines) {
+    const sl = activeById.get(local.id);
+    if (sl) ordered.push(toLine(sl));
+  }
+  for (const sl of active) {
+    if (!localById.has(sl.id)) ordered.push(toLine(sl));
+  }
+  for (const local of session.lines) {
+    if (!isLineLocked(local) && !allServerIds.has(local.id)) ordered.push(local);
+  }
+
+  return {
+    ...session,
+    orderId: order.id,
+    savedOrderNumber: order.orderNumber,
+    savedTotals: {
+      subtotalCents: order.subtotalCents,
+      taxTotalCents: order.taxTotalCents,
+      totalCents: order.totalCents,
+    },
+    savedVersion: order.version,
+    lines: ordered,
+    voidedLines: order.lines
+      .filter((l) => l.status === 'cancelled')
+      .map((l) => ({
+        id: l.id,
+        name: l.nameSnapshot,
+        quantity: l.quantity,
+        lineTotalCents: l.lineTotalCents,
+        reason: l.voidedReason ?? '',
+      })),
+  };
+}
+
 function snapshotFlat(state: OrderState): OrderSession {
   return {
     lines: state.lines,
+    voidedLines: state.voidedLines,
     orderId: state.orderId,
     savedOrderNumber: state.savedOrderNumber,
     savedTotals: state.savedTotals,
@@ -169,7 +271,8 @@ export const useOrderStore = create<OrderState>()(
 
       addProduct: (p) =>
         set((state) => {
-          const existing = state.lines.find((l) => l.productId === p.id);
+          // Se suma a una línea sin guardar o guardada-pendiente; nunca a una ya enviada.
+          const existing = state.lines.find((l) => l.productId === p.id && l.status !== 'sent');
           if (existing) {
             return {
               lines: state.lines.map((l) =>
@@ -193,21 +296,30 @@ export const useOrderStore = create<OrderState>()(
 
       incrementLine: (lineId) =>
         set((state) => ({
-          lines: state.lines.map((l) => (l.id === lineId ? { ...l, quantity: l.quantity + 1 } : l)),
+          // Una línea enviada no crece: el servidor lo rechazaría.
+          lines: state.lines.map((l) =>
+            l.id === lineId && l.status !== 'sent' ? { ...l, quantity: l.quantity + 1 } : l,
+          ),
         })),
 
+      // El mínimo es lo ya guardado (savedQuantity) o 1 si la línea aún no existe en el servidor.
       decrementLine: (lineId) =>
         set((state) => ({
           lines: state.lines.map((l) =>
-            l.id === lineId ? { ...l, quantity: Math.max(1, l.quantity - 1) } : l,
+            l.id === lineId
+              ? { ...l, quantity: Math.max(l.savedQuantity ?? 1, l.quantity - 1) }
+              : l,
           ),
         })),
 
       setQuantity: (lineId, qty) =>
         set((state) => ({
-          lines: state.lines.map((l) =>
-            l.id === lineId ? { ...l, quantity: Math.max(1, qty) } : l,
-          ),
+          lines: state.lines.map((l) => {
+            if (l.id !== lineId) return l;
+            const min = l.savedQuantity ?? 1;
+            // Enviada: no puede cambiar de cantidad.
+            return l.status === 'sent' ? l : { ...l, quantity: Math.max(min, qty) };
+          }),
         })),
 
       removeLine: (lineId) => {
@@ -216,6 +328,8 @@ export const useOrderStore = create<OrderState>()(
         if (index === -1) return null;
         const line = state.lines[index];
         if (!line) return null;
+        // Línea guardada = fijada: solo se anula con orders.voidLine.
+        if (isLineLocked(line)) return null;
         set({ lines: state.lines.filter((l) => l.id !== lineId) });
         return { line, index };
       },
@@ -233,7 +347,9 @@ export const useOrderStore = create<OrderState>()(
           if (idx === -1) return state;
           const source = state.lines[idx];
           if (!source) return state;
-          const copy: OrderLine = { ...source, id: crypto.randomUUID(), quantity: 1 };
+          // La copia es una línea NUEVA: no hereda el estado de guardada/enviada.
+          const { status: _s, savedQuantity: _q, ...rest } = source;
+          const copy: OrderLine = { ...rest, id: crypto.randomUUID(), quantity: 1 };
           const next = [...state.lines];
           next.splice(idx + 1, 0, copy);
           return { lines: next };
@@ -245,6 +361,7 @@ export const useOrderStore = create<OrderState>()(
             state.sessions as Record<SessionKeyString, OrderSession>;
           return {
             lines: [],
+            voidedLines: [],
             orderId: null,
             savedOrderNumber: null,
             savedTotals: null,
@@ -279,28 +396,28 @@ export const useOrderStore = create<OrderState>()(
       },
 
       hydrateFromServer: (order) =>
-        set({
-          orderId: order.id,
-          savedOrderNumber: order.orderNumber,
-          savedTotals: {
-            subtotalCents: order.subtotalCents,
-            taxTotalCents: order.taxTotalCents,
-            totalCents: order.totalCents,
-          },
-          savedVersion: order.version,
-          lines: order.lines.map((l) => ({
-            id: l.id,
-            productId: l.productId ?? '',
-            name: l.nameSnapshot,
-            unitPriceCents: l.unitPriceCents,
-            taxRate: l.taxRate,
-            quantity: l.quantity,
-            notes: l.notes ?? undefined,
-            // Category display fields not available from server — hydrated lines show without them.
-            categoryId: '',
-            categoryColor: null,
-            imageUrl: null,
-          })),
+        set((state) => ({ ...mergeServerOrder(snapshotFlat(state), order) })),
+
+      applyServerOrder: (key, order) =>
+        set((state) => {
+          if (state.activeKey === key) {
+            return { ...mergeServerOrder(snapshotFlat(state), order) };
+          }
+          const parked = key !== null ? state.sessions[key] : undefined;
+          if (!key || !parked) return state; // la sesión ya no existe (se limpió): nada que aplicar
+          return { sessions: { ...state.sessions, [key]: mergeServerOrder(parked, order) } };
+        }),
+
+      markLinesSent: (lineIds) =>
+        set((state) => {
+          const ids = new Set(lineIds);
+          return {
+            lines: state.lines.map((l) =>
+              ids.has(l.id) && isLineLocked(l) && l.status === 'pending'
+                ? { ...l, status: 'sent' as const }
+                : l,
+            ),
+          };
         }),
 
       // True when the client has a saved orderId but no local lines — safe to fetch from server.
@@ -331,7 +448,8 @@ export const useOrderStore = create<OrderState>()(
         ),
     }),
     {
-      name: 'tpv.orderStore.v2',
+      // v3: las líneas llevan status/savedQuantity y la sesión voidedLines (un estado v2 no los tiene).
+      name: 'tpv.orderStore.v3',
       storage: createJSONStorage(() => localStorage),
       // Prevent SSR hydration mismatch — call rehydrate() explicitly in client boot.
       skipHydration: true,

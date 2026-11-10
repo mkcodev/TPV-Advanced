@@ -23,28 +23,23 @@ interface TpvProductCardProps {
 export function TpvProductCard({ product }: TpvProductCardProps) {
   const t = useTranslations('tpv.content');
   const addProduct = useOrderStore((s) => s.addProduct);
-  const incrementLine = useOrderStore((s) => s.incrementLine);
   // Selector primitivo (número): re-render solo cuando la cantidad de este producto cambia
   const count = useOrderStore((s) => s.countForProduct(product.id));
   const [pressed, setPressed] = useState(false);
 
   const handleAdd = useCallback(() => {
     // TODO: if product.hasVariants → open variant selector (tarea 1.4)
-    const existingLine = useOrderStore.getState().lines.find((l) => l.productId === product.id);
-    if (existingLine) {
-      incrementLine(existingLine.id);
-    } else {
-      addProduct({
-        id: product.id,
-        name: product.name,
-        basePriceCents: product.basePriceCents,
-        taxRate: product.taxRate,
-        categoryId: product.categoryId,
-        categoryColor: product.categoryColor,
-        imageUrl: product.imageUrl,
-      });
-    }
-  }, [product, addProduct, incrementLine]);
+    // addProduct suma a la línea existente salvo que ya esté enviada a cocina: entonces crea otra.
+    addProduct({
+      id: product.id,
+      name: product.name,
+      basePriceCents: product.basePriceCents,
+      taxRate: product.taxRate,
+      categoryId: product.categoryId,
+      categoryColor: product.categoryColor,
+      imageUrl: product.imageUrl,
+    });
+  }, [product, addProduct]);
 
   const longPressHandlers = useLongPress({
     onTap: handleAdd,

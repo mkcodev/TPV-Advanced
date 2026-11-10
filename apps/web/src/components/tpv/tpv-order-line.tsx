@@ -1,18 +1,20 @@
 'use client';
 
-import { useOrderStore } from '@/lib/stores/use-order-store';
+import { isLineLocked, useOrderStore } from '@/lib/stores/use-order-store';
 import { formatCents, lineTotalCents } from '@tpv/core';
 import { Button, cn } from '@tpv/ui';
-import { Copy, Minus, Plus, X } from 'lucide-react';
+import { Copy, Lock, Minus, Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 interface TpvOrderLineProps {
   lineId: string;
+  // Abre el diálogo de anulación (líneas guardadas: no se pueden quitar a pelo).
+  onVoid: (lineId: string) => void;
 }
 
-export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
+export function TpvOrderLine({ lineId, onVoid }: TpvOrderLineProps) {
   const t = useTranslations('tpv.order');
   const line = useOrderStore((s) => s.lines.find((l) => l.id === lineId));
   const incrementLine = useOrderStore((s) => s.incrementLine);
@@ -24,6 +26,7 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
   // Swipe state
   const [translateX, setTranslateX] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const isLocked = line !== undefined && isLineLocked(line);
   const swipeState = useRef<{
     startX: number;
     startY: number;
@@ -38,6 +41,11 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
   }, []);
 
   const handleRemove = useCallback(() => {
+    // Una línea guardada está fijada: en vez de borrarla se pide anularla (motivo + encargado).
+    if (isLocked) {
+      onVoid(lineId);
+      return;
+    }
     const result = removeLine(lineId);
     if (!result) return;
     const { line: removed, index } = result;
@@ -48,7 +56,7 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
         onClick: () => restoreLine(removed, index),
       },
     });
-  }, [lineId, removeLine, restoreLine, t]);
+  }, [lineId, isLocked, onVoid, removeLine, restoreLine, t]);
 
   const handleDuplicate = useCallback(() => {
     duplicateLine(lineId);
@@ -119,6 +127,9 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
   if (!line) return null;
 
   const lineTotal = lineTotalCents(line.unitPriceCents, line.quantity);
+  // Fijada: solo "+" si sigue pendiente de enviar, y "−" solo hasta lo ya guardado.
+  const canIncrease = line.status !== 'sent';
+  const canDecrease = !isLocked || line.quantity > (line.savedQuantity ?? 1);
   const showLeft = translateX < -8;
   const showRight = translateX > 8;
 
@@ -164,35 +175,57 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
       >
         {/* Nombre */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{line.name}</p>
+          <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
+            {isLocked && (
+              <Lock
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+                strokeWidth={1.5}
+                aria-hidden="true"
+              />
+            )}
+            <span className="truncate">{line.name}</span>
+          </p>
           <p className="text-xs tabular-nums text-muted-foreground">
             {formatCents(line.unitPriceCents)} × {line.quantity}
+            {isLocked && (
+              <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5">
+                {line.status === 'sent' ? t('lineSent') : t('lineSaved')}
+              </span>
+            )}
           </p>
         </div>
 
         {/* Stepper */}
         <div className="flex shrink-0 items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            aria-label={t('decreaseQty')}
-            onClick={() => decrementLine(lineId)}
-          >
-            <Minus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
+          {canDecrease ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={t('decreaseQty')}
+              onClick={() => decrementLine(lineId)}
+            >
+              <Minus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            </Button>
+          ) : (
+            <span className="h-7 w-7" aria-hidden="true" />
+          )}
           <span className="w-5 text-center text-sm tabular-nums font-medium">{line.quantity}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            aria-label={t('increaseQty')}
-            onClick={() => incrementLine(lineId)}
-          >
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
+          {canIncrease ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={t('increaseQty')}
+              onClick={() => incrementLine(lineId)}
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            </Button>
+          ) : (
+            <span className="h-7 w-7" aria-hidden="true" />
+          )}
         </div>
 
         {/* Importe de la línea */}
@@ -212,16 +245,27 @@ export function TpvOrderLine({ lineId }: TpvOrderLineProps) {
           >
             <Copy className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-            aria-label={t('removeItem')}
-            onClick={handleRemove}
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
+          {isLocked ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-11 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={handleRemove}
+            >
+              {t('voidLine')}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              aria-label={t('removeItem')}
+              onClick={handleRemove}
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

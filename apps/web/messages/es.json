@@ -495,6 +495,12 @@
       "duplicateItem": "Duplicar artículo",
       "swipeLeft": "Anular",
       "swipeRight": "Duplicar",
+      "voidLine": "Anular",
+      "lineSaved": "Guardada",
+      "lineSent": "En cocina",
+      "voidedLabel": "Anulada",
+      "lineLockedError": "Hay artículos ya guardados: para quitarlos usa Anular (pide un encargado).",
+      "lineSentError": "Un artículo ya enviado a cocina no admite más unidades: añádelo como línea nueva.",
       "payment": {
         "title": "Cobrar #{number}",
         "totalDue": "Total a cobrar",
@@ -517,6 +523,32 @@
         "notSavedHint": "Guarda la comanda antes de cobrar",
         "reference": "Referencia (opcional)",
         "removePayment": "Eliminar pago"
+      }
+    },
+    "void": {
+      "title": "Anular «{name}»",
+      "descriptionSelf": "Indica el motivo. Quedará registrado con tu nombre.",
+      "descriptionPin": "Indica el motivo y que un encargado lo autorice con su PIN.",
+      "reason": "Motivo",
+      "reasonPlaceholder": "Escribe el motivo",
+      "reasons": {
+        "waiterError": "Error del camarero",
+        "customerRefused": "El cliente lo rechaza",
+        "outOfStock": "Producto agotado"
+      },
+      "approver": "Encargado que autoriza",
+      "loadingApprovers": "Cargando encargados…",
+      "noApprovers": "No hay ningún encargado activo: nadie puede autorizar la anulación. Actívalo en el panel de administración.",
+      "cancel": "Cancelar",
+      "confirm": "Anular artículo",
+      "voiding": "Anulando…",
+      "success": "Artículo anulado",
+      "errors": {
+        "invalidPin": "PIN incorrecto",
+        "locked": "Ese encargado está bloqueado por intentos fallidos. Espera o usa otro.",
+        "notManager": "Esa persona no puede autorizar anulaciones.",
+        "rateLimit": "Demasiados intentos. Espera un minuto.",
+        "generic": "No se pudo anular el artículo. Inténtalo de nuevo."
       }
     },
     "floor": {

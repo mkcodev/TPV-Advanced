@@ -27,7 +27,10 @@ export function TpvSaveOrderButton() {
       toast.success(t('saveSuccess', { number: data.orderNumber }));
     },
     onError: (e) => {
-      toast.error(e.message || t('saveError'));
+      // Mensajes del servidor que el camarero puede entender; el resto, el genérico.
+      if (e.message === 'LINE_LOCKED_USE_VOID') toast.error(t('lineLockedError'));
+      else if (e.message === 'LINE_SENT_CANNOT_GROW') toast.error(t('lineSentError'));
+      else toast.error(t('saveError'));
     },
   });
 

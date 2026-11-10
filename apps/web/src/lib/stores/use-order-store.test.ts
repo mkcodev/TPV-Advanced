@@ -412,3 +412,162 @@ describe('getBreakdown', () => {
     );
   });
 });
+
+// ── Líneas guardadas = fijadas ────────────────────────────────────────────────
+
+const ORDER_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+function serverOrder(
+  lines: {
+    id: string;
+    productId?: string;
+    quantity: number;
+    status?: string;
+    voidedReason?: string | null;
+  }[],
+) {
+  return {
+    id: ORDER_ID,
+    orderNumber: 3,
+    status: 'open',
+    subtotalCents: 0,
+    taxTotalCents: 0,
+    totalCents: 0,
+    version: 2,
+    lines: lines.map((l) => ({
+      id: l.id,
+      productId: l.productId ?? 'prod-b',
+      nameSnapshot: 'Cerveza',
+      unitPriceCents: 250,
+      taxRate: 10,
+      quantity: l.quantity,
+      lineTotalCents: 250 * l.quantity,
+      notes: null,
+      status: l.status ?? 'pending',
+      voidedReason: l.voidedReason ?? null,
+    })),
+  };
+}
+
+describe('líneas guardadas (fijadas)', () => {
+  beforeEach(() => {
+    useOrderStore.getState().clear();
+  });
+
+  // Guarda dos cañas y devuelve el id de la línea.
+  function saveTwoBeers(status = 'pending') {
+    useOrderStore.getState().addProduct(PRODUCT_B);
+    const id = getLine(0).id;
+    useOrderStore.getState().setQuantity(id, 2);
+    useOrderStore.getState().hydrateFromServer(serverOrder([{ id, quantity: 2, status }]));
+    return id;
+  }
+
+  it('al hidratar, la línea queda con status y savedQuantity y conserva los datos de pintado', () => {
+    const id = saveTwoBeers();
+    const line = getLine(0);
+    expect(line.id).toBe(id);
+    expect(line.status).toBe('pending');
+    expect(line.savedQuantity).toBe(2);
+    expect(line.categoryColor).toBe('#4CAF50'); // viene de la línea local, no del servidor
+  });
+
+  it('removeLine no quita una línea guardada', () => {
+    const id = saveTwoBeers();
+    expect(useOrderStore.getState().removeLine(id)).toBeNull();
+    expect(useOrderStore.getState().lines).toHaveLength(1);
+  });
+
+  it('decrementLine / setQuantity no bajan de lo guardado', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().decrementLine(id);
+    expect(getLine(0).quantity).toBe(2);
+    useOrderStore.getState().setQuantity(id, 1);
+    expect(getLine(0).quantity).toBe(2);
+  });
+
+  it('una línea guardada pendiente admite subir y volver a lo guardado', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().incrementLine(id);
+    expect(getLine(0).quantity).toBe(3);
+    useOrderStore.getState().decrementLine(id);
+    expect(getLine(0).quantity).toBe(2);
+  });
+
+  it('añadir el mismo producto suma a la línea guardada pendiente', () => {
+    saveTwoBeers();
+    useOrderStore.getState().addProduct(PRODUCT_B);
+    expect(useOrderStore.getState().lines).toHaveLength(1);
+    expect(getLine(0).quantity).toBe(3);
+  });
+
+  it('una línea enviada no crece: añadir el producto crea una línea nueva', () => {
+    const id = saveTwoBeers('sent');
+    useOrderStore.getState().incrementLine(id);
+    expect(getLine(0).quantity).toBe(2);
+    useOrderStore.getState().addProduct(PRODUCT_B);
+    const lines = useOrderStore.getState().lines;
+    expect(lines).toHaveLength(2);
+    expect(lines[1]?.quantity).toBe(1);
+    expect(lines[1]?.savedQuantity).toBeUndefined(); // la nueva aún no está guardada
+  });
+
+  it('duplicar una línea guardada crea una línea nueva sin estado de guardada', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().duplicateLine(id);
+    const copy = getLine(1);
+    expect(copy.id).not.toBe(id);
+    expect(copy.status).toBeUndefined();
+    expect(copy.savedQuantity).toBeUndefined();
+    // La copia sí se puede quitar.
+    expect(useOrderStore.getState().removeLine(copy.id)).not.toBeNull();
+  });
+
+  it('markLinesSent pasa a "sent" solo líneas guardadas pendientes', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().addProduct(PRODUCT_A); // sin guardar
+    const unsavedId = getLine(1).id;
+    useOrderStore.getState().markLinesSent([id, unsavedId]);
+    expect(getLine(0).status).toBe('sent');
+    expect(getLine(1).status).toBeUndefined();
+  });
+
+  it('las líneas anuladas salen de lines (no suman) y van a voidedLines con su motivo', () => {
+    const id = saveTwoBeers();
+    useOrderStore
+      .getState()
+      .hydrateFromServer(
+        serverOrder([{ id, quantity: 2, status: 'cancelled', voidedReason: 'Error del camarero' }]),
+      );
+    const s = useOrderStore.getState();
+    expect(s.lines).toHaveLength(0);
+    expect(s.voidedLines).toEqual([
+      { id, name: 'Cerveza', quantity: 2, lineTotalCents: 500, reason: 'Error del camarero' },
+    ]);
+    expect(s.getBreakdown().totalCents).toBe(0);
+  });
+
+  it('hidratar conserva las líneas locales aún sin guardar y no resucita las ya guardadas', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().addProduct(PRODUCT_A); // añadida mientras volaba el guardado
+    useOrderStore.getState().hydrateFromServer(serverOrder([{ id, quantity: 2 }]));
+    const lines = useOrderStore.getState().lines;
+    expect(lines).toHaveLength(2);
+    expect(lines[1]?.productId).toBe('prod-a');
+    expect(lines[1]?.savedQuantity).toBeUndefined();
+  });
+
+  it('applyServerOrder actualiza una sesión aparcada (guardado en segundo plano)', () => {
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    useOrderStore.getState().addProduct(PRODUCT_B);
+    const id = getLine(0).id;
+    // Se cambia de mesa: T1 queda aparcada con la línea sin guardar.
+    useOrderStore.getState().setActiveTable('T2', 'Z1');
+    useOrderStore.getState().applyServerOrder('table:T1', serverOrder([{ id, quantity: 1 }]));
+    // La mesa activa (T2) no se toca.
+    expect(useOrderStore.getState().lines).toHaveLength(0);
+    useOrderStore.getState().setActiveTable('T1', 'Z1');
+    expect(getLine(0).savedQuantity).toBe(1);
+    expect(useOrderStore.getState().orderId).toBe(ORDER_ID);
+  });
+});
