@@ -71,12 +71,14 @@ Determinadas acciones requieren que el empleado tenga rol `manager` o `admin`, y
 
 | Acción | Rol mínimo | Re-verifica PIN |
 |---|---|---|
-| Anular línea ya enviada a cocina | manager | No (solo rol) |
+| Anular una línea ya guardada (pendiente o enviada) | manager | **Sí, en el momento**: el encargado teclea su PIN (o ya está logueado como encargado y se autoriza él mismo) |
 | Aplicar descuento en comanda/línea | manager | No |
 | Cerrar sesión de caja (arqueo Z) | manager | Sí |
 | Acceder a configuración del negocio | admin | Sí |
 | Revocar dispositivo | admin | Sí (desde panel web) |
 | Ver informe de ventas por empleado | manager | No |
+
+> **Anulación de líneas (`orders.voidLine`).** Una línea queda *fijada* en cuanto se guarda la comanda o se envía a cocina, tenga o no destino de impresión (las cañas de barra también). El `upsert` ya no puede borrarla ni bajarla; solo `voidLine`. El servidor exige motivo y aprobador manager/admin (mismo negocio, activo). El PIN del aprobador pasa por `verifyEmployeePin`, que comparte rate-limit, lockout y contador de fallos con el login, y se verifica **antes** de abrir la transacción para que el contador de intentos sobreviva a un error. `order_events` registra `item_voided` con `employee_id` = quien lo pidió y `approvedBy` + `reason` en el payload; la línea queda `cancelled` con `voided_by` = aprobador (CHECK `order_items_voided_check`).
 
 > Esta matriz es la mínima recomendada; el negocio puede endurecerla desde el panel. La verificación se hace **en el servidor** (middleware del router tRPC), nunca ocultando solo el botón en el cliente.
 

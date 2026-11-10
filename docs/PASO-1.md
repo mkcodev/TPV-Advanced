@@ -1,6 +1,6 @@
 # Paso 1 — Instalar el TPV en un bar real sin seed
 
-> **Estado:** PR-1 (#39, empleados + `db:bootstrap`) mergeado. PR-2 (#35, terminales) en curso. PR-3 (#36, líneas fijadas + anulación con PIN de encargado) pendiente. Este documento es el plan aprobado; las desviaciones se anotan en cada PR.
+> **Estado:** PR-1 (#39, empleados + `db:bootstrap`) mergeado. PR-2 (#40, terminales) mergeado. PR-3 (#36, líneas fijadas + anulación con PIN de encargado + migración 0008) en revisión. Este documento es el plan aprobado; las desviaciones se anotan en cada PR.
 
 ## Contexto
 

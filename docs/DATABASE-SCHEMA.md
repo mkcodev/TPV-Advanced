@@ -446,8 +446,8 @@ Cada producto añadido. Guarda **snapshots** de nombre/precio/IVA (no cambian au
 | line_total_cents | integer | Total de la línea (con modificadores y descuento) |
 | course | text (nullable) | Curso: 'starter'/'main'/'drink' |
 | notes | text | ej. "poco hecho" |
-| status | text (enum) | 'pending' / 'sent' / 'preparing' / 'ready' / 'served' / 'cancelled' |
-| voided_reason | text (nullable) | Motivo de anulación (obligatorio si status='cancelled') |
+| status | text (enum) | 'pending' / 'sent' / 'preparing' / 'ready' / 'served' / 'cancelled'. Transiciones hoy: `pending` (guardada) → `sent` (`markLinesSent`) y `pending`/`sent` → `cancelled` (`voidLine`). Una línea no `cancelled` que existe en BD está **fijada**: el upsert no la borra ni baja. `cancelled` nunca se borra y no cuenta en totales |
+| voided_reason | text (nullable) | Motivo de anulación. CHECK `order_items_voided_check`: si status='cancelled', `voided_reason` y `voided_by` son obligatorios |
 | voided_by | uuid FK→employees (nullable) | Quién anuló. Anular línea ya enviada a cocina requiere rol manager+ y siempre escribe `order_events` |
 | sent_to_kitchen_at | timestamptz (nullable) | |
 | created_by | uuid FK→employees | |
