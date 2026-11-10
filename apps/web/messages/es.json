@@ -92,6 +92,73 @@
         }
       }
     },
+    "employees": {
+      "title": "Empleados",
+      "subtitle": "Quién puede entrar en el TPV y qué puede hacer. El acceso a este panel es aparte.",
+      "new": "Nuevo empleado",
+      "edit": "Editar empleado",
+      "empty": "No hay empleados todavía",
+      "emptyCta": "Crea el primer empleado",
+      "loadError": "No se pudieron cargar los empleados",
+      "noApprover": {
+        "title": "No hay ningún encargado activo",
+        "description": "Nadie podrá autorizar anulaciones en el TPV. Activa o crea un empleado con rol encargado o administrador."
+      },
+      "roles": {
+        "worker": "Camarero",
+        "manager": "Encargado",
+        "admin": "Administrador"
+      },
+      "roleHelp": {
+        "worker": "Toma comandas y cobra. No puede autorizar anulaciones.",
+        "manager": "Además de lo anterior, autoriza anulaciones de líneas ya enviadas a cocina.",
+        "admin": "Igual que encargado, con acceso a los ajustes sensibles del TPV."
+      },
+      "status": {
+        "active": "Activo",
+        "inactive": "Desactivado",
+        "lockedUntil": "Bloqueado hasta {time}"
+      },
+      "columns": {
+        "name": "Nombre",
+        "role": "Rol",
+        "status": "Estado",
+        "active": "Activo",
+        "actions": "Acciones"
+      },
+      "actions": {
+        "edit": "Editar empleado",
+        "changePin": "Cambiar PIN"
+      },
+      "fields": {
+        "name": "Nombre",
+        "namePlaceholder": "Ej: Ana",
+        "role": "Rol en el TPV",
+        "pin": "PIN",
+        "pinHint": "De 4 a 6 dígitos. El empleado lo usa para entrar en el TPV.",
+        "pinInvalid": "El PIN debe tener entre 4 y 6 dígitos",
+        "newPin": "Nuevo PIN",
+        "repeatPin": "Repetir PIN",
+        "pinMismatch": "Los PIN no coinciden"
+      },
+      "pinDialog": {
+        "title": "Cambiar PIN de {name}",
+        "description": "Al guardar, el empleado queda desbloqueado y entra con el PIN nuevo."
+      },
+      "deactivate": {
+        "title": "Desactivar empleado",
+        "description": "{name} dejará de aparecer en el TPV y su sesión abierta se cerrará. Sus ventas anteriores se conservan. ¿Continuar?",
+        "confirm": "Desactivar"
+      },
+      "toast": {
+        "created": "Empleado creado",
+        "updated": "Empleado actualizado",
+        "activated": "Empleado activado",
+        "deactivated": "Empleado desactivado",
+        "pinChanged": "PIN cambiado",
+        "error": "No se pudo guardar el empleado"
+      }
+    },
     "floor": {
       "title": "Sala y mesas",
       "tabs": {
