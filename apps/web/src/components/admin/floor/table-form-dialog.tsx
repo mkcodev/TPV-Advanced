@@ -1,5 +1,6 @@
 'use client';
 
+import { type FloorTableRect, nextFreePosition } from '@/lib/floor/floor-layout';
 import { trpc } from '@/lib/trpc/client';
 import {
   Button,
@@ -40,6 +41,9 @@ type Props = {
   onClose: () => void;
   zoneId: string;
   table?: Table;
+  // Solo en altas: mesas de la zona y ancho del lienzo, para colocar la nueva en un hueco libre.
+  existingTables?: readonly FloorTableRect[];
+  canvasWidth?: number;
   onSuccess: () => void;
 };
 type FormValues = {
@@ -52,7 +56,15 @@ type FormValues = {
 
 const SHAPES = ['square', 'round'] as const;
 
-export function TableFormDialog({ open, onClose, zoneId, table, onSuccess }: Props) {
+export function TableFormDialog({
+  open,
+  onClose,
+  zoneId,
+  table,
+  existingTables = [],
+  canvasWidth,
+  onSuccess,
+}: Props) {
   const t = useTranslations();
   const utils = trpc.useUtils();
   const form = useForm<FormValues>({
@@ -106,6 +118,10 @@ export function TableFormDialog({ open, onClose, zoneId, table, onSuccess }: Pro
         height,
       });
     } else {
+      // Antes toda mesa nueva nacía en (20,20) y se apilaba; ahora va al primer hueco libre.
+      const maxRight = existingTables.reduce((m, e) => Math.max(m, e.posX + e.width), 0);
+      const rowWidth = canvasWidth ?? Math.max(maxRight, 20 + width);
+      const { posX, posY } = nextFreePosition(existingTables, { width, height }, rowWidth);
       createMutation.mutate({
         zoneId,
         name: values.name,
@@ -113,8 +129,8 @@ export function TableFormDialog({ open, onClose, zoneId, table, onSuccess }: Pro
         shape: values.shape,
         width,
         height,
-        posX: 20,
-        posY: 20,
+        posX,
+        posY,
       });
     }
   }

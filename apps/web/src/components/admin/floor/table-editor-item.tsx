@@ -1,5 +1,6 @@
 'use client';
 
+import { FLOOR_GRID_PX } from '@/lib/floor/floor-layout';
 import { trpc } from '@/lib/trpc/client';
 import { Users } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -22,10 +23,8 @@ type Props = {
   onUpdated: () => void;
 };
 
-const GRID = 10;
-
 function snapToGrid(value: number): number {
-  return Math.round(value / GRID) * GRID;
+  return Math.round(value / FLOOR_GRID_PX) * FLOOR_GRID_PX;
 }
 
 export function TableEditorItem({ table, zoneId, onUpdated }: Props) {
