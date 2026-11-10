@@ -1,6 +1,6 @@
-import { businesses, devices, memberships, organizations } from '@tpv/db';
+import { businesses, devices, employees, memberships, organizations } from '@tpv/db';
 import type { Database } from '@tpv/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AuthContext } from '../context';
 import { verifyEmployeeSession } from './session';
 import type { JwtVerifier } from './supabase-jwt';
@@ -21,23 +21,36 @@ export function createAuthResolver(deps: ResolverDeps) {
       const deviceToken = headers.get('x-device-token');
       if (deviceToken) {
         const hash = sha256Base64Url(deviceToken);
-        const [device] = await deps.db
-          .select()
+
+        // El JWT se verifica primero (sin BD) para poder pedir dispositivo y empleado
+        // en UNA sola consulta: un viaje a BD por petición.
+        const sessionToken = headers.get('x-employee-session');
+        const session = sessionToken
+          ? await verifyEmployeeSession(sessionToken, deps.sessionSecret)
+          : null;
+
+        // LEFT JOIN: el empleado solo cuenta si sigue ACTIVO y es del MISMO negocio que el
+        // dispositivo. Así, desactivar a alguien corta su sesión PIN (12 h) en la siguiente
+        // petición, y una sesión no sirve para otro negocio.
+        const [row] = await deps.db
+          .select({ device: devices, activeEmployeeId: employees.id })
           .from(devices)
+          .leftJoin(
+            employees,
+            and(
+              session ? eq(employees.id, session.employeeId) : sql`false`,
+              eq(employees.businessId, devices.businessId),
+              eq(employees.isActive, true),
+            ),
+          )
           .where(and(eq(devices.deviceTokenHash, hash), eq(devices.isActive, true)))
           .limit(1);
 
-        if (!device) return { kind: 'anonymous' };
+        if (!row) return { kind: 'anonymous' };
+        const { device } = row;
 
-        let employeeId: string | null = null;
-        const sessionToken = headers.get('x-employee-session');
-        if (sessionToken) {
-          const session = await verifyEmployeeSession(sessionToken, deps.sessionSecret);
-          // Bind the session to THIS device — prevents cross-device session reuse
-          if (session?.deviceId === device.id) {
-            employeeId = session.employeeId;
-          }
-        }
+        // Bind the session to THIS device — prevents cross-device session reuse
+        const employeeId = session?.deviceId === device.id ? (row.activeEmployeeId ?? null) : null;
 
         // Best-effort lastSeenAt update — fire-and-forget, never blocks the request
         deps.db

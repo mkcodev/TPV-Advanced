@@ -7,7 +7,12 @@ export type AuthEventType =
   | 'employee_locked_out'
   | 'device_paired'
   | 'device_revoked'
-  | 'pairing_code_created';
+  | 'pairing_code_created'
+  | 'employee_created'
+  | 'employee_updated'
+  | 'employee_pin_changed'
+  | 'employee_deactivated'
+  | 'employee_reactivated';
 
 interface LogAuthEventOpts {
   businessId: string;

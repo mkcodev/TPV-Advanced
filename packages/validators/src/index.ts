@@ -2,12 +2,41 @@ import { z } from 'zod';
 
 // Convención: validar SIEMPRE los datos externos en los bordes (API, formularios).
 
-export const createEmployeeSchema = z.object({
-  name: z.string().min(1, 'El nombre es obligatorio'),
-  pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
-  role: z.enum(['admin', 'manager', 'worker']).default('worker'),
-});
+export const createEmployeeSchema = z
+  .object({
+    name: z.string().trim().min(1, 'El nombre es obligatorio').max(80),
+    pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
+    role: z.enum(['admin', 'manager', 'worker']).default('worker'),
+  })
+  .strict();
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
+
+// Ninguno de estos schemas lleva business_id: sale SIEMPRE del contexto de auth.
+// .strict() rechaza las claves desconocidas: un businessId colado da error, no se ignora.
+export const updateEmployeeSchema = z
+  .object({
+    id: z.string().uuid('Invalid employee ID'),
+    name: z.string().trim().min(1, 'El nombre es obligatorio').max(80).optional(),
+    role: z.enum(['admin', 'manager', 'worker']).optional(),
+  })
+  .strict();
+export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+
+export const setEmployeePinSchema = z
+  .object({
+    id: z.string().uuid('Invalid employee ID'),
+    pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
+  })
+  .strict();
+export type SetEmployeePinInput = z.infer<typeof setEmployeePinSchema>;
+
+export const setEmployeeActiveSchema = z
+  .object({
+    id: z.string().uuid('Invalid employee ID'),
+    isActive: z.boolean(),
+  })
+  .strict();
+export type SetEmployeeActiveInput = z.infer<typeof setEmployeeActiveSchema>;
 
 // Auth schemas
 
