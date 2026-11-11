@@ -210,12 +210,14 @@ Sin RLS ni GRANT nuevos.
 - Cambio de costumbre: tras enviar, la misma caña sale en una línea nueva.
 
 ### Probar en navegador (PR-3)
-1. Ana (worker) abre una mesa y añade 2 cañas: antes de guardar, el −/× funciona.
+Personas: Ana = admin (autoriza), Luis = manager, Bruno = camarero (PIN 5678).
+1. Bruno abre una mesa y añade 2 cañas: antes de guardar, el −/× funciona.
 2. Vuelve al plano (guarda) y entra de nuevo: las cañas tienen candado, sin −/×, y el + suma.
 3. Añade una tapa y la envía a cocina. Otra tapa sale en una línea nueva, no se suma a la enviada.
-4. Anular la caña → motivo → Luis → PIN mal: error. PIN bien: sale tachada y el total baja.
-5. Luis logueado anula la tapa enviada: no pide PIN.
-6. Cobrar: el ticket y el Z no incluyen lo anulado.
+4. Bruno anula la caña → motivo → elige a Luis → PIN mal: error. PIN bien: sale tachada y el total baja.
+5. Bruno intenta anular la tapa eligiendo como aprobador a Bruno (o con su PIN): NO autoriza (solo salen encargados/admin; el servidor lo rechaza con FORBIDDEN).
+6. Ana (admin) logueada anula la tapa enviada: no pide PIN.
+7. Cobrar: el ticket y el Z no incluyen lo anulado.
 
 ---
 
