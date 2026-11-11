@@ -481,6 +481,7 @@
       "charge": "Cobrar",
       "save": "Guardar comanda",
       "saving": "Guardando…",
+      "saved": "Comanda guardada",
       "saveSuccess": "Comanda #{number} guardada",
       "saveError": "No se pudo guardar la comanda",
       "requestBill": "Pedir cuenta",

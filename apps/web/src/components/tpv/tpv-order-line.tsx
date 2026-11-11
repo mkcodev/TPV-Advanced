@@ -160,7 +160,7 @@ export function TpvOrderLine({ lineId, onVoid }: TpvOrderLineProps) {
       {/* Contenido de la línea */}
       <div
         className={cn(
-          'relative flex items-center gap-2 border-l-4 bg-card px-3 py-2',
+          'relative border-l-4 bg-card px-3 py-2',
           isAnimating &&
             'transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)]',
         )}
@@ -173,100 +173,109 @@ export function TpvOrderLine({ lineId, onVoid }: TpvOrderLineProps) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        {/* Nombre */}
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
-            {isLocked && (
-              <Lock
-                className="h-3 w-3 shrink-0 text-muted-foreground"
-                strokeWidth={1.5}
-                aria-hidden="true"
-              />
-            )}
-            <span className="truncate">{line.name}</span>
-          </p>
-          <p className="text-xs tabular-nums text-muted-foreground">
-            {formatCents(line.unitPriceCents)} × {line.quantity}
-            {isLocked && (
-              <span className="ml-2 rounded-sm bg-muted px-1.5 py-0.5">
-                {line.status === 'sent' ? t('lineSent') : t('lineSaved')}
-              </span>
-            )}
-          </p>
-        </div>
+        <div className="flex items-center gap-2">
+          {/* Nombre */}
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
+              {isLocked && (
+                <Lock
+                  className="h-3 w-3 shrink-0 text-muted-foreground"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+              )}
+              <span className="truncate">{line.name}</span>
+            </p>
+            <p className="text-xs tabular-nums text-muted-foreground">
+              {formatCents(line.unitPriceCents)} × {line.quantity}
+            </p>
+          </div>
 
-        {/* Stepper */}
-        <div className="flex shrink-0 items-center gap-1">
-          {canDecrease ? (
+          {/* Stepper */}
+          <div className="flex shrink-0 items-center gap-1">
+            {canDecrease ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t('decreaseQty')}
+                onClick={() => decrementLine(lineId)}
+              >
+                <Minus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+              </Button>
+            ) : (
+              <span className="h-7 w-7" aria-hidden="true" />
+            )}
+            <span className="w-5 text-center text-sm tabular-nums font-medium">
+              {line.quantity}
+            </span>
+            {canIncrease ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t('increaseQty')}
+                onClick={() => incrementLine(lineId)}
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+              </Button>
+            ) : (
+              <span className="h-7 w-7" aria-hidden="true" />
+            )}
+          </div>
+
+          {/* Importe de la línea */}
+          <span className="w-14 shrink-0 text-right text-sm tabular-nums font-medium text-foreground">
+            {formatCents(lineTotal)}
+          </span>
+
+          {/* Acciones de escritorio */}
+          <div className="flex shrink-0 items-center gap-0.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
-              aria-label={t('decreaseQty')}
-              onClick={() => decrementLine(lineId)}
+              className="h-7 w-7 text-muted-foreground hover:text-primary"
+              aria-label={t('duplicateItem')}
+              onClick={handleDuplicate}
             >
-              <Minus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+              <Copy className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
             </Button>
-          ) : (
-            <span className="h-7 w-7" aria-hidden="true" />
-          )}
-          <span className="w-5 text-center text-sm tabular-nums font-medium">{line.quantity}</span>
-          {canIncrease ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              aria-label={t('increaseQty')}
-              onClick={() => incrementLine(lineId)}
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-            </Button>
-          ) : (
-            <span className="h-7 w-7" aria-hidden="true" />
-          )}
+            {isLocked ? (
+              <span className="h-7 w-7" aria-hidden="true" />
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                aria-label={t('removeItem')}
+                onClick={handleRemove}
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Importe de la línea */}
-        <span className="w-14 shrink-0 text-right text-sm tabular-nums font-medium text-foreground">
-          {formatCents(lineTotal)}
-        </span>
-
-        {/* Acciones de escritorio */}
-        <div className="flex shrink-0 items-center gap-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-primary"
-            aria-label={t('duplicateItem')}
-            onClick={handleDuplicate}
-          >
-            <Copy className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
-          {isLocked ? (
+        {/* Línea guardada: estado y "Anular" en su propia fila, para no ensanchar la comanda. */}
+        {isLocked && (
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              {line.status === 'sent' ? t('lineSent') : t('lineSaved')}
+            </span>
             <Button
               type="button"
               variant="ghost"
-              className="min-h-11 px-2 text-xs text-destructive hover:text-destructive"
+              className="min-h-11 px-3 text-xs text-destructive hover:text-destructive"
               onClick={handleRemove}
             >
               {t('voidLine')}
             </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-              aria-label={t('removeItem')}
-              onClick={handleRemove}
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
