@@ -29,7 +29,8 @@ export function TpvOrderLines() {
   return (
     <>
       <ScrollArea className="flex-1">
-        <div className="divide-y divide-border">
+        {/* w-0 + min-w-full: Radix envuelve el contenido en un display:table que crece hasta el texto más ancho; así se queda al ancho de la barra lateral. */}
+        <div className="w-0 min-w-full divide-y divide-border">
           {lineIds.map((id) => (
             <TpvOrderLine key={id} lineId={id} onVoid={setVoidingId} />
           ))}
