@@ -15,8 +15,18 @@ export function TpvRequestBillButton() {
   const utils = trpc.useUtils();
   const [pending, setPending] = useState(false);
 
-  const { lines, type, tableId, ensureOrderId, hydrateFromServer } = useOrderStore(
+  const {
+    lines,
+    type,
+    tableId,
+    ensureOrderId,
+    hydrateFromServer,
+    billRequestedAt,
+    setBillRequestedAt,
+  } = useOrderStore(
     useShallow((s) => ({
+      billRequestedAt: s.billRequestedAt,
+      setBillRequestedAt: s.setBillRequestedAt,
       lines: s.lines,
       type: s.type,
       tableId: s.tableId,
@@ -46,7 +56,8 @@ export function TpvRequestBillButton() {
         })),
       });
       hydrateFromServer(saved);
-      await requestBill.mutateAsync({ orderId: saved.id });
+      const billed = await requestBill.mutateAsync({ orderId: saved.id });
+      setBillRequestedAt(billed.billRequestedAt);
       await utils.floor.tables.listWithOpenOrders.invalidate();
       toast.success(t('requestBillSuccess'));
     } catch {
@@ -61,10 +72,14 @@ export function TpvRequestBillButton() {
       variant="outline"
       size="xl"
       className="w-full"
-      disabled={lines.length === 0 || pending}
+      disabled={lines.length === 0 || pending || billRequestedAt !== null}
       onClick={handleClick}
     >
-      {pending ? t('requestingBill') : t('requestBill')}
+      {pending
+        ? t('requestingBill')
+        : billRequestedAt !== null
+          ? t('billRequested')
+          : t('requestBill')}
     </Button>
   );
 }

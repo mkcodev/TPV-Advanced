@@ -656,7 +656,7 @@ describe('orders.requestBill', () => {
       orderId: ORDER_ID,
     });
 
-    expect(result).toEqual({ orderId: ORDER_ID, billRequestedAt: asked });
+    expect(result).toEqual({ orderId: ORDER_ID, billRequestedAt: asked.toISOString() });
     const setRow = calls.find((c) => c.method === 'set')?.args[0] as Record<string, unknown>;
     expect(setRow).toHaveProperty('billRequestedAt'); // COALESCE(bill_requested_at, now())
     const wheres = calls.filter((c) => c.method === 'where');
@@ -674,7 +674,7 @@ describe('orders.requestBill', () => {
     const result = await createCaller({ ...deviceCtx(), db }).orders.requestBill({
       orderId: ORDER_ID,
     });
-    expect(result.billRequestedAt).toEqual(asked);
+    expect(result.billRequestedAt).toEqual(asked.toISOString());
     expect(calls.find((c) => c.method === 'values')).toBeUndefined();
   });
 

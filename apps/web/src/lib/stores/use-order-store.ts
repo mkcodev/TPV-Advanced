@@ -61,6 +61,8 @@ export interface ServerOrder {
   taxTotalCents: number;
   totalCents: number;
   version: number;
+  // ISO string (tRPC no usa transformer). null = la cuenta no está pedida.
+  billRequestedAt?: string | null;
   lines: Array<{
     id: string;
     productId: string | null;
@@ -82,6 +84,7 @@ export type SessionKeyString = 'counter' | `table:${string}`;
 
 interface OrderSession {
   lines: OrderLine[];
+  billRequestedAt: string | null;
   voidedLines: VoidedLine[];
   orderId: string | null;
   savedOrderNumber: number | null;
@@ -96,6 +99,7 @@ interface OrderSession {
 
 const EMPTY_SESSION: OrderSession = {
   lines: [],
+  billRequestedAt: null,
   voidedLines: [],
   orderId: null,
   savedOrderNumber: null,
@@ -132,6 +136,9 @@ interface OrderState extends OrderSession {
   // Igual, pero para la sesión de una clave concreta (activa o aparcada): el guardado en
   // segundo plano al volver al plano termina cuando ya puede haber otra mesa activa.
   applyServerOrder: (key: SessionKeyString | null, order: ServerOrder) => void;
+  // Quita lo NO guardado (líneas nuevas y unidades añadidas); lo guardado se queda: solo se anula.
+  discardDraft: () => void;
+  setBillRequestedAt: (at: string | null) => void;
   // Tras enviar a cocina: las líneas pasan a 'sent' sin esperar a otra lectura.
   markLinesSent: (lineIds: string[]) => void;
   shouldHydrateFromServer: () => boolean;
@@ -210,6 +217,7 @@ function mergeServerOrder(session: OrderSession, order: ServerOrder): OrderSessi
       totalCents: order.totalCents,
     },
     savedVersion: order.version,
+    billRequestedAt: order.billRequestedAt ?? null,
     lines: ordered,
     voidedLines: order.lines
       .filter((l) => l.status === 'cancelled')
@@ -226,6 +234,7 @@ function mergeServerOrder(session: OrderSession, order: ServerOrder): OrderSessi
 function snapshotFlat(state: OrderState): OrderSession {
   return {
     lines: state.lines,
+    billRequestedAt: state.billRequestedAt,
     voidedLines: state.voidedLines,
     orderId: state.orderId,
     savedOrderNumber: state.savedOrderNumber,
@@ -361,6 +370,7 @@ export const useOrderStore = create<OrderState>()(
             state.sessions as Record<SessionKeyString, OrderSession>;
           return {
             lines: [],
+            billRequestedAt: null,
             voidedLines: [],
             orderId: null,
             savedOrderNumber: null,
@@ -371,6 +381,15 @@ export const useOrderStore = create<OrderState>()(
         }),
 
       clearActive: () => get().clear(),
+
+      discardDraft: () =>
+        set((state) => ({
+          lines: state.lines
+            .filter((l) => isLineLocked(l))
+            .map((l) => ({ ...l, quantity: l.savedQuantity ?? l.quantity })),
+        })),
+
+      setBillRequestedAt: (at) => set({ billRequestedAt: at }),
 
       countForProduct: (productId) =>
         get()

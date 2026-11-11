@@ -317,6 +317,7 @@ async function loadOrderResponse(tx: BusinessTransaction, orderId: string, busin
       taxTotalCents: orders.taxTotalCents,
       totalCents: orders.totalCents,
       version: orders.version,
+      billRequestedAt: orders.billRequestedAt,
     })
     .from(orders)
     .where(and(eq(orders.id, orderId), eq(orders.businessId, businessId)))
@@ -329,7 +330,11 @@ async function loadOrderResponse(tx: BusinessTransaction, orderId: string, busin
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
 
-  return { ...finalOrder, lines: finalItems.map(mapItem) };
+  return {
+    ...finalOrder,
+    billRequestedAt: finalOrder.billRequestedAt?.toISOString() ?? null,
+    lines: finalItems.map(mapItem),
+  };
 }
 
 // ── router ────────────────────────────────────────────────────────────────────
@@ -809,7 +814,10 @@ export const ordersRouter = router({
         });
       }
 
-      return { orderId: order.id, billRequestedAt: updated?.billRequestedAt ?? null };
+      return {
+        orderId: order.id,
+        billRequestedAt: updated?.billRequestedAt?.toISOString() ?? null,
+      };
     });
   }),
 
@@ -829,6 +837,7 @@ export const ordersRouter = router({
         taxTotalCents: orders.taxTotalCents,
         totalCents: orders.totalCents,
         version: orders.version,
+        billRequestedAt: orders.billRequestedAt,
       })
       .from(orders)
       .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
@@ -841,7 +850,11 @@ export const ordersRouter = router({
       .from(orderItems)
       .where(eq(orderItems.orderId, input.orderId));
 
-    return { ...order, lines: items.map(mapItem) };
+    return {
+      ...order,
+      billRequestedAt: order.billRequestedAt?.toISOString() ?? null,
+      lines: items.map(mapItem),
+    };
   }),
 
   getByTable: deviceProcedure.input(tableIdSchema).query(async ({ ctx, input }) => {
@@ -861,6 +874,7 @@ export const ordersRouter = router({
           taxTotalCents: orders.taxTotalCents,
           totalCents: orders.totalCents,
           version: orders.version,
+          billRequestedAt: orders.billRequestedAt,
         })
         .from(orders)
         .where(
@@ -879,7 +893,11 @@ export const ordersRouter = router({
         .from(orderItems)
         .where(eq(orderItems.orderId, order.id));
 
-      return { ...order, lines: items.map(mapItem) };
+      return {
+        ...order,
+        billRequestedAt: order.billRequestedAt?.toISOString() ?? null,
+        lines: items.map(mapItem),
+      };
     });
   }),
 

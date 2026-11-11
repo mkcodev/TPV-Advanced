@@ -570,4 +570,33 @@ describe('líneas guardadas (fijadas)', () => {
     expect(getLine(0).savedQuantity).toBe(1);
     expect(useOrderStore.getState().orderId).toBe(ORDER_ID);
   });
+  it('discardDraft quita lo no guardado y deja lo guardado (también tras añadir unidades)', () => {
+    const id = saveTwoBeers();
+    useOrderStore.getState().incrementLine(id); // 3 unidades, 2 guardadas
+    useOrderStore.getState().addProduct(PRODUCT_A); // línea nueva sin guardar
+    useOrderStore.getState().discardDraft();
+    const lines = useOrderStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.id).toBe(id);
+    expect(lines[0]?.quantity).toBe(2);
+    expect(lines[0]?.savedQuantity).toBe(2);
+  });
+
+  it('billRequestedAt viene del servidor, se puede fijar y clear() lo limpia', () => {
+    const id = saveTwoBeers();
+    expect(useOrderStore.getState().billRequestedAt).toBeNull();
+    useOrderStore.getState().hydrateFromServer({
+      ...serverOrder([{ id, quantity: 2 }]),
+      billRequestedAt: '2026-11-11T20:00:00.000Z',
+    });
+    expect(useOrderStore.getState().billRequestedAt).toBe('2026-11-11T20:00:00.000Z');
+    // Un guardado posterior que hizo crecer la comanda la devuelve a null.
+    useOrderStore
+      .getState()
+      .hydrateFromServer({ ...serverOrder([{ id, quantity: 3 }]), billRequestedAt: null });
+    expect(useOrderStore.getState().billRequestedAt).toBeNull();
+    useOrderStore.getState().setBillRequestedAt('2026-11-11T21:00:00.000Z');
+    useOrderStore.getState().clear();
+    expect(useOrderStore.getState().billRequestedAt).toBeNull();
+  });
 });
