@@ -23,9 +23,10 @@
 
 </div>
 
+<!-- TODO: captura real del plano de sala (tema claro y oscuro) en docs/assets/hero-light.jpg y hero-dark.jpg, datos de ejemplo, desde localhost con una BD de desarrollo confirmada. Ahora hay placeholders .svg: cambiar las rutas del <picture>. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.jpg">
-  <img src="docs/assets/hero-light.jpg" alt="Plano de sala del TPV con mesas libres, ocupadas y pendientes de cobro (datos de ejemplo)" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img src="docs/assets/hero-light.svg" alt="Captura pendiente: plano de sala del TPV con mesas libres, ocupadas y pendientes de cobro" width="100%">
 </picture>
 
 <details>
@@ -78,9 +79,10 @@ Su autor trabajó años de camarero y conoce el problema desde dentro. El objeti
 | Impresión ESC/POS, tiempo real y app de camareros | Impresora térmica, sincronización entre dispositivos y PWA | Pendiente |
 | Escritorio (Electron) y modo offline | La misma UI web en una caja de escritorio con SQLite local | Pendiente |
 
+<!-- TODO: captura real de la pantalla de venta (tema claro y oscuro) en docs/assets/sale-light.jpg y sale-dark.jpg. Ahora hay placeholders .svg: cambiar las rutas del <picture>. -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sale-dark.jpg">
-  <img src="docs/assets/sale-light.jpg" alt="Pantalla de venta con productos, líneas de la comanda y totales (datos de ejemplo)" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sale-dark.svg">
+  <img src="docs/assets/sale-light.svg" alt="Captura pendiente: pantalla de venta con productos, líneas de la comanda y totales" width="100%">
 </picture>
 
 > [!IMPORTANT]

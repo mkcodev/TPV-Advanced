@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Pantalla de venta">
+  <rect width="1280" height="720" rx="16" fill="#f1f5f9"/>
+  <rect x="24" y="24" width="1232" height="672" rx="12" fill="none" stroke="#0f172a" stroke-opacity="0.35" stroke-width="2" stroke-dasharray="10 8"/>
+  <text x="640" y="350" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="600" fill="#0f172a">Pantalla de venta</text>
+  <text x="640" y="402" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" fill="#0f172a" fill-opacity="0.7">Captura pendiente</text>
+</svg>
