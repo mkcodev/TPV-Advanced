@@ -2,6 +2,8 @@
 // ⚖️ Verificar spec AEAT vigente antes de producción real.
 
 import type { Database } from '@tpv/db';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import type { Context } from '../context';
 import { ordersRouter } from '../routers/orders';
@@ -277,6 +279,7 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     nameSnapshot: 'Plato',
     quantity: 2,
     notes: null,
+    status: 'pending',
     printDestination: 'kitchen',
   };
   const BAR_ITEM = {
@@ -284,6 +287,7 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     nameSnapshot: 'Cerveza',
     quantity: 1,
     notes: null,
+    status: 'pending',
     printDestination: 'bar',
   };
   const NONE_ITEM = {
@@ -291,6 +295,7 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     nameSnapshot: 'Sin destino',
     quantity: 1,
     notes: null,
+    status: 'pending',
     printDestination: 'none',
   };
 
@@ -298,7 +303,6 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     const { db } = queuedDb([
       [{ id: ORDER_ID_1, orderNumber: 5, tableId: null }], // SELECT order
       [KITCHEN_ITEM, KITCHEN_ITEM, BAR_ITEM, NONE_ITEM], // SELECT items JOIN categories
-      [], // SELECT kitchen_sent events → ninguno
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.orders.getKitchenPayload({ orderId: ORDER_ID_1 });
@@ -309,12 +313,10 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     expect(result.pendingItemIds).toHaveLength(3); // 2 kitchen + 1 bar
   });
 
-  it('pendingItemIds excluye los ids ya presentes en eventos kitchen_sent', async () => {
+  it('pendingItemIds excluye las líneas ya enviadas (status sent)', async () => {
     const { db } = queuedDb([
       [{ id: ORDER_ID_1, orderNumber: 5, tableId: null }],
-      [KITCHEN_ITEM, BAR_ITEM],
-      // Un evento kitchen_sent previo que ya mandó el KITCHEN_ITEM
-      [{ payload: { itemIds: [KITCHEN_ITEM.id] } }],
+      [{ ...KITCHEN_ITEM, status: 'sent' }, BAR_ITEM],
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     const result = await caller.orders.getKitchenPayload({ orderId: ORDER_ID_1 });
@@ -322,6 +324,62 @@ describe('orders.getKitchenPayload — agrupación por printDestination', () => 
     expect(result.pendingItemIds).not.toContain(KITCHEN_ITEM.id);
     expect(result.pendingItemIds).toContain(BAR_ITEM.id);
     expect(result.pendingItemIds).toHaveLength(1);
+  });
+
+  it('la consulta excluye las líneas anuladas (cancelled)', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID_1, orderNumber: 5, tableId: null }],
+      [KITCHEN_ITEM],
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.getKitchenPayload({ orderId: ORDER_ID_1 });
+    // El WHERE de las líneas lleva el parámetro 'cancelled' (ne(status, 'cancelled')).
+    const itemsWhere = calls.filter((c) => c.method === 'where')[1];
+    const params = new PgDialect().sqlToQuery(itemsWhere?.args[0] as SQL).params;
+    expect(params).toContain('cancelled');
+  });
+});
+
+describe('orders.markLinesSent — fija las líneas enviadas', () => {
+  const LINE = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  it("pasa a status 'sent' con sent_to_kitchen_at, solo las pending de ESA comanda", async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID_1 }], // SELECT order
+      [{ id: LINE }], // UPDATE order_items ... RETURNING
+      [{}], // INSERT orderEvents
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.markLinesSent({
+      orderId: ORDER_ID_1,
+      itemIds: [LINE],
+    });
+
+    const sets = calls
+      .filter((c) => c.method === 'set')
+      .map((c) => c.args[0] as Record<string, unknown>);
+    expect(sets[0]).toHaveProperty('status', 'sent');
+    expect(sets[0]).toHaveProperty('sentToKitchenAt');
+    // WHERE del UPDATE: id de línea + comanda + 'pending'.
+    const updWhere = calls.filter((c) => c.method === 'where')[1];
+    const params = new PgDialect().sqlToQuery(updWhere?.args[0] as SQL).params;
+    expect(params).toEqual(expect.arrayContaining([LINE, ORDER_ID_1, 'pending']));
+  });
+
+  it('el evento kitchen_sent solo lista las líneas realmente marcadas', async () => {
+    const OTHER = 'aaaaaaaa-0000-0000-0000-000000000002';
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID_1 }],
+      [{ id: LINE }], // OTHER no estaba pending (o es de otra comanda): no vuelve del RETURNING
+      [{}],
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.markLinesSent({
+      orderId: ORDER_ID_1,
+      itemIds: [LINE, OTHER],
+    });
+    const eventValues = calls
+      .filter((c) => c.method === 'values')
+      .map((c) => c.args[0] as { eventType?: string; payload?: { itemIds: string[] } })
+      .find((v) => v.eventType === 'kitchen_sent');
+    expect(eventValues?.payload?.itemIds).toEqual([LINE]);
   });
 });
 

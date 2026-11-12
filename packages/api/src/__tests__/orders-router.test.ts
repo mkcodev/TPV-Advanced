@@ -8,7 +8,7 @@
 import type { Database } from '@tpv/db';
 import { upsertOrderSchema } from '@tpv/validators';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Context } from '../context';
 import { ordersRouter } from '../routers/orders';
 import { createCallerFactory, router } from '../trpc';
@@ -132,6 +132,8 @@ function singleLineInsertQueue(
         quantity: 1,
         lineTotalCents: product.basePriceCents,
         notes: null,
+        status: 'pending',
+        voidedReason: null,
       },
     ], // 12. final items
   ];
@@ -268,7 +270,16 @@ describe('orders.upsert — idempotencia', () => {
     // El mock devuelve la orden como existente y abierta.
     const { db, calls } = queuedDb([
       [{ id: ORDER_ID, status: 'open' }], // 1. order found → UPDATE path
-      [{ id: LINE_ID, productId: PROD_ID, variantId: null, unitPriceCents: 250 }], // 2. existing items
+      [
+        {
+          id: LINE_ID,
+          productId: PROD_ID,
+          variantId: null,
+          unitPriceCents: 250,
+          quantity: 1,
+          status: 'pending',
+        },
+      ], // 2. existing items
       [{}], // 3. update orderItem qty/notes
       [{}], // 4. update orders header (notes)
       [{ lineTotalCents: 250, taxRate: '10.00' }], // 5. select items for totals
@@ -295,6 +306,8 @@ describe('orders.upsert — idempotencia', () => {
           quantity: 1,
           lineTotalCents: 250,
           notes: null,
+          status: 'pending',
+          voidedReason: null,
         },
       ], // 8. final items
     ]);
@@ -325,7 +338,16 @@ describe('orders.upsert — snapshot inmutable', () => {
     const OTHER_PROD = 'cccccccc-0000-0000-0000-000000000001';
     const { db } = queuedDb([
       [{ id: ORDER_ID, status: 'open' }], // order found → UPDATE
-      [{ id: LINE_ID, productId: PROD_ID, variantId: null, unitPriceCents: 250 }], // existing items
+      [
+        {
+          id: LINE_ID,
+          productId: PROD_ID,
+          variantId: null,
+          unitPriceCents: 250,
+          quantity: 1,
+          status: 'pending',
+        },
+      ], // existing items
     ]);
     const caller = createCaller({ ...deviceCtx(), db });
     await expect(
@@ -370,12 +392,13 @@ describe('orders.getById — sin employeeId', () => {
 // ── bill_requested_at: solo AÑADIR líneas o SUBIR cantidades lo pone a NULL ──────
 
 const NEW_LINE_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
-const existingLine = (quantity: number, id = LINE_ID) => ({
+const existingLine = (quantity: number, id = LINE_ID, status = 'pending') => ({
   id,
   productId: PROD_ID,
   variantId: null,
   unitPriceCents: 250,
   quantity,
+  status,
 });
 
 // Cola del final del camino UPDATE: cabecera, totales, comanda final y líneas finales.
@@ -443,34 +466,6 @@ describe('orders.upsert — reglas de bill_requested_at', () => {
     expect(headerSet(calls)).toHaveProperty('billRequestedAt', null);
   });
 
-  it('bajar la cantidad NO lo toca', async () => {
-    const { db, calls } = queuedDb([
-      [{ id: ORDER_ID, status: 'open' }],
-      [existingLine(3)],
-      [{}],
-      ...updateTail(),
-    ]);
-    await createCaller({ ...deviceCtx(), db }).orders.upsert({
-      ...MIN_INPUT,
-      lines: [{ lineId: LINE_ID, productId: PROD_ID, quantity: 1 }],
-    });
-    expect(headerSet(calls)).toBeDefined();
-    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
-  });
-
-  it('quitar una línea NO lo toca', async () => {
-    const { db, calls } = queuedDb([
-      [{ id: ORDER_ID, status: 'open' }],
-      [existingLine(1), existingLine(1, NEW_LINE_ID)],
-      [{}], // delete de la línea que sobra
-      [{}], // update línea que queda
-      ...updateTail(),
-    ]);
-    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
-    expect(headerSet(calls)).toBeDefined();
-    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
-  });
-
   it('guardar sin cambios (misma cantidad) NO lo toca', async () => {
     const { db, calls } = queuedDb([
       [{ id: ORDER_ID, status: 'open' }],
@@ -490,6 +485,117 @@ describe('orders.upsert — reglas de bill_requested_at', () => {
       unknown
     >;
     expect(orderValues).not.toHaveProperty('billRequestedAt');
+  });
+});
+
+// ── Líneas fijadas: guardar = fijar; solo se quitan con voidLine ──────────────
+
+describe('orders.upsert — líneas fijadas (LINE_LOCKED_USE_VOID)', () => {
+  // Falla en la validación: ni una sola escritura (set/values) ni DELETE.
+  async function expectRejectedWithoutWrites(
+    responses: unknown[][],
+    lines: { lineId: string; productId: string; quantity: number }[],
+    expected: { code: string; message: string },
+  ) {
+    const { db, calls } = queuedDb(responses);
+    const deleteSpy = vi.spyOn(db, 'delete');
+    await expect(
+      createCaller({ ...deviceCtx(), db }).orders.upsert({ ...MIN_INPUT, lines }),
+    ).rejects.toMatchObject(expected);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.method === 'set' || c.method === 'values')).toHaveLength(0);
+  }
+
+  it('línea guardada (pending, p. ej. caña de barra con print_destination none) → quitarla da FORBIDDEN y no hay DELETE', async () => {
+    await expectRejectedWithoutWrites(
+      [[{ id: ORDER_ID, status: 'open' }], [existingLine(2)]],
+      [], // el cliente la ha quitado
+      { code: 'FORBIDDEN', message: 'LINE_LOCKED_USE_VOID' },
+    );
+  });
+
+  it('línea guardada → bajar la cantidad da FORBIDDEN', async () => {
+    await expectRejectedWithoutWrites(
+      [[{ id: ORDER_ID, status: 'open' }], [existingLine(3)]],
+      [{ lineId: LINE_ID, productId: PROD_ID, quantity: 1 }],
+      { code: 'FORBIDDEN', message: 'LINE_LOCKED_USE_VOID' },
+    );
+  });
+
+  it('línea enviada (sent) → quitarla da FORBIDDEN', async () => {
+    await expectRejectedWithoutWrites(
+      [[{ id: ORDER_ID, status: 'open' }], [existingLine(1, LINE_ID, 'sent')]],
+      [],
+      { code: 'FORBIDDEN', message: 'LINE_LOCKED_USE_VOID' },
+    );
+  });
+
+  it('línea enviada (sent) → subir la cantidad da BAD_REQUEST', async () => {
+    await expectRejectedWithoutWrites(
+      [[{ id: ORDER_ID, status: 'open' }], [existingLine(1, LINE_ID, 'sent')]],
+      [{ lineId: LINE_ID, productId: PROD_ID, quantity: 2 }],
+      { code: 'BAD_REQUEST', message: 'LINE_SENT_CANNOT_GROW' },
+    );
+  });
+
+  it('si una línea falla la validación, no se escribe ni la que sí era válida', async () => {
+    // Hay dos líneas guardadas: la 1 sube (válido) y la 2 falta (prohibido).
+    await expectRejectedWithoutWrites(
+      [[{ id: ORDER_ID, status: 'open' }], [existingLine(1), existingLine(1, NEW_LINE_ID)]],
+      [{ lineId: LINE_ID, productId: PROD_ID, quantity: 5 }],
+      { code: 'FORBIDDEN', message: 'LINE_LOCKED_USE_VOID' },
+    );
+  });
+
+  it('línea anulada (cancelled) ausente del input → ni error ni DELETE ni UPDATE de esa línea', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1), existingLine(2, NEW_LINE_ID, 'cancelled')],
+      [{}], // update de la pending
+      ...updateTail(),
+    ]);
+    const deleteSpy = vi.spyOn(db, 'delete');
+    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    const lineSets = calls
+      .filter((c) => c.method === 'set')
+      .map((c) => c.args[0] as Record<string, unknown>)
+      .filter((a) => 'quantity' in a);
+    expect(lineSets).toHaveLength(1); // solo la pending
+  });
+
+  it('línea enviada sin cambios → ok y no se reescribe', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1, LINE_ID, 'sent')],
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert(MIN_INPUT);
+    const lineSets = calls
+      .filter((c) => c.method === 'set')
+      .map((c) => c.args[0] as Record<string, unknown>)
+      .filter((a) => 'quantity' in a);
+    expect(lineSets).toHaveLength(0);
+    expect(headerSet(calls)).not.toHaveProperty('billRequestedAt');
+  });
+
+  it('línea nueva junto a una enviada → INSERT y anula "pedir cuenta"', async () => {
+    const { db, calls } = queuedDb([
+      [{ id: ORDER_ID, status: 'open' }],
+      [existingLine(1, LINE_ID, 'sent')],
+      [{ id: PROD_ID, name: 'Tapa', basePriceCents: 250, taxRate: '10.00' }], // product
+      [{}], // insert orderItems
+      [{}], // insert orderEvents
+      ...updateTail(),
+    ]);
+    await createCaller({ ...deviceCtx(), db }).orders.upsert({
+      ...MIN_INPUT,
+      lines: [
+        { lineId: LINE_ID, productId: PROD_ID, quantity: 1 },
+        { lineId: NEW_LINE_ID, productId: PROD_ID, quantity: 1 },
+      ],
+    });
+    expect(headerSet(calls)).toHaveProperty('billRequestedAt', null);
   });
 });
 
@@ -550,7 +656,7 @@ describe('orders.requestBill', () => {
       orderId: ORDER_ID,
     });
 
-    expect(result).toEqual({ orderId: ORDER_ID, billRequestedAt: asked });
+    expect(result).toEqual({ orderId: ORDER_ID, billRequestedAt: asked.toISOString() });
     const setRow = calls.find((c) => c.method === 'set')?.args[0] as Record<string, unknown>;
     expect(setRow).toHaveProperty('billRequestedAt'); // COALESCE(bill_requested_at, now())
     const wheres = calls.filter((c) => c.method === 'where');
@@ -568,7 +674,7 @@ describe('orders.requestBill', () => {
     const result = await createCaller({ ...deviceCtx(), db }).orders.requestBill({
       orderId: ORDER_ID,
     });
-    expect(result.billRequestedAt).toEqual(asked);
+    expect(result.billRequestedAt).toEqual(asked.toISOString());
     expect(calls.find((c) => c.method === 'values')).toBeUndefined();
   });
 

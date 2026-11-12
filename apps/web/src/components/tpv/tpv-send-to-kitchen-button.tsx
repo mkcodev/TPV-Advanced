@@ -5,6 +5,7 @@ import { trpc } from '@/lib/trpc/client';
 import { Button } from '@tpv/ui';
 import { UtensilsCrossed } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 export function TpvSendToKitchenButton() {
@@ -21,6 +22,18 @@ export function TpvSendToKitchenButton() {
     { orderId: orderId ?? '' },
     { enabled: !!orderId && linesCount > 0 && savedTotals !== null },
   );
+
+  // La comanda se envía desde otra ventana (su propio store). Al volver el foco, esta consulta
+  // se refresca y las líneas ya enviadas pasan a "En cocina" aquí también (no admiten más
+  // unidades: el servidor lo rechazaría).
+  const markLinesSent = useOrderStore((s) => s.markLinesSent);
+  useEffect(() => {
+    if (!data) return;
+    const sentIds = [...data.groups.kitchen, ...data.groups.bar]
+      .filter((r) => r.status === 'sent')
+      .map((r) => r.id);
+    if (sentIds.length > 0) markLinesSent(sentIds);
+  }, [data, markLinesSent]);
 
   const hasPending = (data?.pendingItemIds.length ?? 0) > 0;
   const canSend = !!orderId && linesCount > 0 && savedTotals !== null && hasPending;

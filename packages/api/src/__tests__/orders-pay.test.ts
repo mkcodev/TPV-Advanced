@@ -3,6 +3,8 @@
 
 import type { Database } from '@tpv/db';
 import { payOrderSchema } from '@tpv/validators';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 import type { Context } from '../context';
 import { ordersRouter } from '../routers/orders';
@@ -104,6 +106,19 @@ const CASH_INPUT = {
   orderId: ORDER_ID,
   payments: [{ method: 'cash' as const, amountCents: 1000, cashReceivedCents: 2000 }],
 };
+
+// ── Líneas anuladas no cuentan en el cobro ──────────────────────────────────
+
+describe('orders.pay — excluye las líneas anuladas', () => {
+  it("el SELECT de líneas para el total filtra status <> 'cancelled'", async () => {
+    const { db, calls } = queuedDb(payQueue());
+    await createCaller({ ...deviceCtx(), db }).orders.pay(CASH_INPUT);
+    // where #0 = comanda FOR UPDATE; where #1 = líneas para el total.
+    const itemsWhere = calls.filter((c) => c.method === 'where')[1];
+    const params = new PgDialect().sqlToQuery(itemsWhere?.args[0] as SQL).params;
+    expect(params).toContain('cancelled');
+  });
+});
 
 // ── Zod rechaza campos prohibidos ────────────────────────────────────────────
 

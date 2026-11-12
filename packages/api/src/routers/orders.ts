@@ -7,7 +7,9 @@
 // ⚖️ Verificar spec AEAT vigente antes de producción real.
 
 import {
+  applyPinSuccess,
   calculateChangeCents,
+  isManagerOrAbove,
   lineTotalCents,
   orderTaxBreakdown,
   summarizePayments,
@@ -16,6 +18,7 @@ import {
   type BusinessTransaction,
   businesses,
   cashSessions,
+  employees,
   invoiceTaxLines,
   invoices,
   orderEvents,
@@ -34,10 +37,12 @@ import {
   payOrderSchema,
   tableIdSchema,
   upsertOrderSchema,
+  voidLineSchema,
 } from '@tpv/validators';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
-import { deviceProcedure } from '../procedures';
+import { verifyEmployeePin } from '../auth/verify-employee-pin';
+import { deviceProcedure, getEmployeeRole } from '../procedures';
 import { router } from '../trpc';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -143,8 +148,16 @@ async function insertLines(
   }
 }
 
+// Una línea queda FIJADA en cuanto existe en BD (guardada = 'pending', o enviada = 'sent'...),
+// tenga o no destino de impresión. Ya no se puede quitar ni bajar desde el upsert: solo con
+// orders.voidLine (motivo + PIN de encargado). Así las cañas de barra, que nunca "se envían",
+// tampoco se pueden borrar sin control.
+// Códigos de error que el cliente reconoce para explicar el rechazo.
+export const LINE_LOCKED_MESSAGE = 'LINE_LOCKED_USE_VOID';
+export const LINE_SENT_NO_GROW_MESSAGE = 'LINE_SENT_CANNOT_GROW';
+
 // Devuelve true si la comanda "creció": hay líneas nuevas o alguna cantidad sube.
-// Quitar líneas o bajar cantidades NO cuenta. Solo crecer anula el "pedir cuenta".
+// Solo crecer anula el "pedir cuenta".
 async function reconcileLines(
   tx: BusinessTransaction,
   orderId: string,
@@ -159,41 +172,47 @@ async function reconcileLines(
       variantId: orderItems.variantId,
       unitPriceCents: orderItems.unitPriceCents,
       quantity: orderItems.quantity,
+      status: orderItems.status,
     })
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
 
   const existingMap = new Map(existing.map((e) => [e.id, e]));
-  const inputIds = new Set(inputLines.map((l) => l.lineId));
+  const inputMap = new Map(inputLines.map((l) => [l.lineId, l]));
 
-  // Lines in DB but not in input → delete.
-  const toDelete = existing.filter((e) => !inputIds.has(e.id));
-  if (toDelete.length > 0) {
-    await tx.delete(orderItems).where(
-      and(
-        inArray(
-          orderItems.id,
-          toDelete.map((e) => e.id),
-        ),
-        eq(orderItems.orderId, orderId),
-      ),
-    );
+  // 1) Validar TODO antes de escribir nada: si una regla falla, no se toca la BD.
+  for (const ex of existing) {
+    // Las anuladas son auditoría: se ignoran venga o no en el input.
+    if (ex.status === 'cancelled') continue;
+    const line = inputMap.get(ex.id);
+    if (!line) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: LINE_LOCKED_MESSAGE });
+    }
+    // Snapshot immutability: productId and variantId are frozen at line creation.
+    if (ex.productId !== line.productId || ex.variantId !== (line.variantId ?? null)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Line snapshot cannot change product',
+      });
+    }
+    if (line.quantity < ex.quantity) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: LINE_LOCKED_MESSAGE });
+    }
+    // Lo ya enviado a cocina no crece: lo añadido va en una línea nueva.
+    if (ex.status !== 'pending' && line.quantity > ex.quantity) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: LINE_SENT_NO_GROW_MESSAGE });
+    }
   }
 
-  // Lines in input: update existing, insert new.
+  // 2) Escribir: actualizar las 'pending' existentes e insertar las nuevas.
   const toInsert: InputLine[] = [];
   let grew = false;
   for (const line of inputLines) {
     const ex = existingMap.get(line.lineId);
     if (ex) {
+      // Anuladas y ya enviadas: nada que actualizar (la validación ya garantizó que no cambian).
+      if (ex.status !== 'pending') continue;
       if (line.quantity > ex.quantity) grew = true;
-      // Snapshot immutability: productId and variantId are frozen at line creation.
-      if (ex.productId !== line.productId || ex.variantId !== (line.variantId ?? null)) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Line snapshot cannot change product',
-        });
-      }
       const gross = lineTotalCents(ex.unitPriceCents, line.quantity);
       await tx
         .update(orderItems)
@@ -221,10 +240,11 @@ async function applyTotals(
   orderId: string,
   businessId: string,
 ): Promise<void> {
+  // Las líneas anuladas no cuentan: se conservan solo como auditoría.
   const items = await tx
     .select({ lineTotalCents: orderItems.lineTotalCents, taxRate: orderItems.taxRate })
     .from(orderItems)
-    .where(eq(orderItems.orderId, orderId));
+    .where(and(eq(orderItems.orderId, orderId), ne(orderItems.status, 'cancelled')));
 
   const breakdown = orderTaxBreakdown(
     items.map((i) => ({ grossCents: i.lineTotalCents, taxRate: Number(i.taxRate) })),
@@ -242,6 +262,21 @@ async function applyTotals(
     .where(and(eq(orders.id, orderId), eq(orders.businessId, businessId)));
 }
 
+// Columnas de línea que se devuelven al cliente (una sola definición para todos los endpoints).
+const itemColumns = {
+  id: orderItems.id,
+  productId: orderItems.productId,
+  variantId: orderItems.variantId,
+  nameSnapshot: orderItems.nameSnapshot,
+  unitPriceCents: orderItems.unitPriceCents,
+  taxRate: orderItems.taxRate,
+  quantity: orderItems.quantity,
+  lineTotalCents: orderItems.lineTotalCents,
+  notes: orderItems.notes,
+  status: orderItems.status,
+  voidedReason: orderItems.voidedReason,
+};
+
 function mapItem(item: {
   id: string;
   productId: string | null;
@@ -252,6 +287,8 @@ function mapItem(item: {
   quantity: number;
   lineTotalCents: number;
   notes: string | null;
+  status: string;
+  voidedReason: string | null;
 }) {
   return {
     id: item.id,
@@ -263,6 +300,40 @@ function mapItem(item: {
     quantity: item.quantity,
     lineTotalCents: item.lineTotalCents,
     notes: item.notes,
+    status: item.status,
+    voidedReason: item.voidedReason,
+  };
+}
+
+// Respuesta común de upsert y voidLine: cabecera + TODAS las líneas (también las anuladas,
+// para que el cliente las pinte tachadas). Usa el mismo tx, así ve lo recién escrito.
+async function loadOrderResponse(tx: BusinessTransaction, orderId: string, businessId: string) {
+  const [finalOrder] = await tx
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      status: orders.status,
+      subtotalCents: orders.subtotalCents,
+      taxTotalCents: orders.taxTotalCents,
+      totalCents: orders.totalCents,
+      version: orders.version,
+      billRequestedAt: orders.billRequestedAt,
+    })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.businessId, businessId)))
+    .limit(1);
+
+  if (!finalOrder) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+  const finalItems = await tx
+    .select(itemColumns)
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+
+  return {
+    ...finalOrder,
+    billRequestedAt: finalOrder.billRequestedAt?.toISOString() ?? null,
+    lines: finalItems.map(mapItem),
   };
 }
 
@@ -371,38 +442,104 @@ export const ordersRouter = router({
 
       await applyTotals(tx, input.orderId, ctx.businessId);
 
-      const [finalOrder] = await tx
-        .select({
-          id: orders.id,
-          orderNumber: orders.orderNumber,
-          status: orders.status,
-          subtotalCents: orders.subtotalCents,
-          taxTotalCents: orders.taxTotalCents,
-          totalCents: orders.totalCents,
-          version: orders.version,
-        })
+      return loadOrderResponse(tx, input.orderId, ctx.businessId);
+    });
+  }),
+
+  // Anular una línea YA GUARDADA (pending o sent). La pide cualquier empleado logueado, pero la
+  // autoriza un encargado: o es el propio solicitante (manager/admin) o aporta el PIN de uno.
+  // Queda en order_events quién la pidió, quién la autorizó y el motivo. La fila nunca se borra.
+  voidLine: deviceProcedure.input(voidLineSchema).mutation(async ({ ctx, input }) => {
+    if (!ctx.employeeId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+    const requesterId = ctx.employeeId;
+
+    const requesterRole = await getEmployeeRole(ctx.db, requesterId, ctx.businessId);
+    if (!requesterRole) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Employee login required' });
+    }
+
+    // El aprobador se resuelve ANTES de abrir la transacción: si el PIN falla se escribe el
+    // contador de intentos/bloqueo, y ese UPDATE no debe revertirse con el error.
+    let approverId: string;
+    if (isManagerOrAbove(requesterRole)) {
+      approverId = requesterId;
+    } else {
+      if (!input.approverEmployeeId || !input.approverPin) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Manager approval required' });
+      }
+      const approver = await verifyEmployeePin(ctx.db, {
+        businessId: ctx.businessId,
+        deviceId: ctx.deviceId,
+        ip: ctx.ip,
+        employeeId: input.approverEmployeeId,
+        pin: input.approverPin,
+      });
+      if (!isManagerOrAbove(approver.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Approver must be manager or above' });
+      }
+      await ctx.db.update(employees).set(applyPinSuccess()).where(eq(employees.id, approver.id));
+      approverId = approver.id;
+    }
+
+    return withBusinessContext(ctx.db, ctx.businessId, async (tx) => {
+      // Bloqueo de la fila: evita carreras con un cobro o un upsert simultáneo.
+      const [order] = await tx
+        .select({ id: orders.id, status: orders.status })
         .from(orders)
         .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
-        .limit(1);
+        .for('update');
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: 'Order not found' });
+      if (order.status !== 'open') {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Order is not open' });
+      }
 
-      if (!finalOrder) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-
-      const finalItems = await tx
+      const [line] = await tx
         .select({
           id: orderItems.id,
-          productId: orderItems.productId,
-          variantId: orderItems.variantId,
+          status: orderItems.status,
           nameSnapshot: orderItems.nameSnapshot,
-          unitPriceCents: orderItems.unitPriceCents,
-          taxRate: orderItems.taxRate,
           quantity: orderItems.quantity,
           lineTotalCents: orderItems.lineTotalCents,
-          notes: orderItems.notes,
         })
         .from(orderItems)
-        .where(eq(orderItems.orderId, input.orderId));
+        .where(and(eq(orderItems.id, input.lineId), eq(orderItems.orderId, order.id)))
+        .limit(1);
+      if (!line) throw new TRPCError({ code: 'NOT_FOUND', message: 'Line not found' });
+      if (line.status === 'cancelled') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Line already voided' });
+      }
 
-      return { ...finalOrder, lines: finalItems.map(mapItem) };
+      await tx
+        .update(orderItems)
+        .set({
+          status: 'cancelled',
+          voidedReason: input.reason,
+          voidedBy: approverId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(orderItems.id, line.id), eq(orderItems.orderId, order.id)));
+
+      await tx.insert(orderEvents).values({
+        orderId: order.id,
+        businessId: ctx.businessId,
+        eventType: 'item_voided',
+        employeeId: requesterId, // quien lo pide; el aprobador va en el payload
+        payload: {
+          lineId: line.id,
+          reason: input.reason,
+          approvedBy: approverId,
+          nameSnapshot: line.nameSnapshot,
+          quantity: line.quantity,
+          lineTotalCents: line.lineTotalCents,
+          wasSent: line.status !== 'pending',
+        },
+      });
+
+      await applyTotals(tx, order.id, ctx.businessId);
+
+      return loadOrderResponse(tx, order.id, ctx.businessId);
     });
   }),
 
@@ -440,7 +577,7 @@ export const ordersRouter = router({
       const items = await tx
         .select({ lineTotalCents: orderItems.lineTotalCents, taxRate: orderItems.taxRate })
         .from(orderItems)
-        .where(eq(orderItems.orderId, order.id));
+        .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, 'cancelled')));
 
       const breakdown = orderTaxBreakdown(
         items.map((i) => ({ grossCents: i.lineTotalCents, taxRate: Number(i.taxRate) })),
@@ -677,7 +814,10 @@ export const ordersRouter = router({
         });
       }
 
-      return { orderId: order.id, billRequestedAt: updated?.billRequestedAt ?? null };
+      return {
+        orderId: order.id,
+        billRequestedAt: updated?.billRequestedAt?.toISOString() ?? null,
+      };
     });
   }),
 
@@ -697,6 +837,7 @@ export const ordersRouter = router({
         taxTotalCents: orders.taxTotalCents,
         totalCents: orders.totalCents,
         version: orders.version,
+        billRequestedAt: orders.billRequestedAt,
       })
       .from(orders)
       .where(and(eq(orders.id, input.orderId), eq(orders.businessId, ctx.businessId)))
@@ -705,21 +846,15 @@ export const ordersRouter = router({
     if (!order) throw new TRPCError({ code: 'NOT_FOUND' });
 
     const items = await ctx.db
-      .select({
-        id: orderItems.id,
-        productId: orderItems.productId,
-        variantId: orderItems.variantId,
-        nameSnapshot: orderItems.nameSnapshot,
-        unitPriceCents: orderItems.unitPriceCents,
-        taxRate: orderItems.taxRate,
-        quantity: orderItems.quantity,
-        lineTotalCents: orderItems.lineTotalCents,
-        notes: orderItems.notes,
-      })
+      .select(itemColumns)
       .from(orderItems)
       .where(eq(orderItems.orderId, input.orderId));
 
-    return { ...order, lines: items.map(mapItem) };
+    return {
+      ...order,
+      billRequestedAt: order.billRequestedAt?.toISOString() ?? null,
+      lines: items.map(mapItem),
+    };
   }),
 
   getByTable: deviceProcedure.input(tableIdSchema).query(async ({ ctx, input }) => {
@@ -739,6 +874,7 @@ export const ordersRouter = router({
           taxTotalCents: orders.taxTotalCents,
           totalCents: orders.totalCents,
           version: orders.version,
+          billRequestedAt: orders.billRequestedAt,
         })
         .from(orders)
         .where(
@@ -753,21 +889,15 @@ export const ordersRouter = router({
       if (!order) return null;
 
       const items = await tx
-        .select({
-          id: orderItems.id,
-          productId: orderItems.productId,
-          variantId: orderItems.variantId,
-          nameSnapshot: orderItems.nameSnapshot,
-          unitPriceCents: orderItems.unitPriceCents,
-          taxRate: orderItems.taxRate,
-          quantity: orderItems.quantity,
-          lineTotalCents: orderItems.lineTotalCents,
-          notes: orderItems.notes,
-        })
+        .select(itemColumns)
         .from(orderItems)
         .where(eq(orderItems.orderId, order.id));
 
-      return { ...order, lines: items.map(mapItem) };
+      return {
+        ...order,
+        billRequestedAt: order.billRequestedAt?.toISOString() ?? null,
+        lines: items.map(mapItem),
+      };
     });
   }),
 
@@ -804,20 +934,11 @@ export const ordersRouter = router({
         .where(eq(orders.id, invoice.orderId))
         .limit(1);
 
+      // El ticket no incluye las líneas anuladas.
       const items = await tx
-        .select({
-          id: orderItems.id,
-          productId: orderItems.productId,
-          variantId: orderItems.variantId,
-          nameSnapshot: orderItems.nameSnapshot,
-          unitPriceCents: orderItems.unitPriceCents,
-          taxRate: orderItems.taxRate,
-          quantity: orderItems.quantity,
-          lineTotalCents: orderItems.lineTotalCents,
-          notes: orderItems.notes,
-        })
+        .select(itemColumns)
         .from(orderItems)
-        .where(eq(orderItems.orderId, invoice.orderId));
+        .where(and(eq(orderItems.orderId, invoice.orderId), ne(orderItems.status, 'cancelled')));
 
       const [business] = await tx
         .select({
@@ -859,12 +980,26 @@ export const ordersRouter = router({
         .limit(1);
       if (!order) throw new TRPCError({ code: 'NOT_FOUND' });
 
+      // Solo pasan a 'sent' las líneas 'pending' de ESTA comanda (el id suelto de otra comanda
+      // o una ya anulada no cambian). returning() dice cuáles se marcaron de verdad.
+      const marked = await tx
+        .update(orderItems)
+        .set({ status: 'sent', sentToKitchenAt: sql`now()`, updatedAt: new Date() })
+        .where(
+          and(
+            inArray(orderItems.id, input.itemIds),
+            eq(orderItems.orderId, order.id),
+            eq(orderItems.status, 'pending'),
+          ),
+        )
+        .returning({ id: orderItems.id });
+
       await tx.insert(orderEvents).values({
         orderId: order.id,
         businessId: ctx.businessId,
         eventType: 'kitchen_sent',
         employeeId,
-        payload: { itemIds: input.itemIds },
+        payload: { itemIds: marked.map((m) => m.id) },
       });
 
       return { ok: true };
@@ -890,24 +1025,16 @@ export const ordersRouter = router({
           nameSnapshot: orderItems.nameSnapshot,
           quantity: orderItems.quantity,
           notes: orderItems.notes,
+          status: orderItems.status,
           printDestination: productCategories.printDestination,
         })
         .from(orderItems)
         .innerJoin(products, eq(products.id, orderItems.productId))
         .innerJoin(productCategories, eq(productCategories.id, products.categoryId))
-        .where(eq(orderItems.orderId, order.id));
+        .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, 'cancelled')));
 
-      const sentEvents = await tx
-        .select({ payload: orderEvents.payload })
-        .from(orderEvents)
-        .where(and(eq(orderEvents.orderId, order.id), eq(orderEvents.eventType, 'kitchen_sent')));
-
-      const sentIds = new Set<string>();
-      for (const e of sentEvents) {
-        const ids = (e.payload as { itemIds?: string[] } | null)?.itemIds ?? [];
-        for (const id of ids) sentIds.add(id);
-      }
-
+      // "Pendiente de enviar" = status 'pending' con destino de impresión. Lo que va a 'none'
+      // (p. ej. una caña de barra) queda fijado al guardar pero nunca se envía.
       return {
         order,
         groups: {
@@ -915,7 +1042,7 @@ export const ordersRouter = router({
           bar: rows.filter((r) => r.printDestination === 'bar'),
         },
         pendingItemIds: rows
-          .filter((r) => r.printDestination !== 'none' && !sentIds.has(r.id))
+          .filter((r) => r.printDestination !== 'none' && r.status === 'pending')
           .map((r) => r.id),
       };
     });

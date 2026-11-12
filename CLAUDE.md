@@ -94,7 +94,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 | Raíz (registra todos) | `root.ts` | — |
 | Catálogo (categorías + productos) | `catalog.ts` | ⭐ patrón de referencia para routers nuevos |
 | Sala y mesas (zones + tables) | `floor.ts` | sigue `catalog.ts`. `listWithOpenOrders` = plano en UNA sentencia (total, pendiente, empleado) |
-| Comandas (upsert, pay, requestBill, getByTable…) | `orders.ts` | `requestBill` fija `bill_requested_at`; `upsert` lo anula si la comanda crece |
+| Comandas (upsert, pay, requestBill, getByTable, voidLine…) | `orders.ts` | `requestBill` fija `bill_requested_at`; `upsert` lo anula si la comanda crece. **Línea guardada = fijada**: `upsert` nunca borra ni baja líneas existentes (`FORBIDDEN LINE_LOCKED_USE_VOID`; una `sent` tampoco sube: `BAD_REQUEST LINE_SENT_CANNOT_GROW`). Solo `voidLine` las anula (`cancelled`, motivo + PIN de encargado verificado con `auth/verify-employee-pin.ts` ANTES de la transacción). `markLinesSent` pasa `pending`→`sent`. Las `cancelled` no cuentan en totales/cobro/ticket/cocina |
 | Auth (device pairing, PIN login, terminales) | `auth.ts` | `createPairingCode`, `listDevices`, `revokeDevice` con `panelAdminProcedure`. Códigos de 8 dígitos, 15 min, un solo uso; se regeneran si chocan con uno activo. `pairDevice` reclama UNA fila (`FOR UPDATE SKIP LOCKED`). `listDevices` nunca expone `deviceTokenHash` |
 | Empleados (list, create, update, setActive, setPin) | `employees.ts` | Todo con `panelAdminProcedure` (solo panel owner/admin, nunca un terminal). Nunca se borra: se desactiva. `setPin` también desbloquea. `pinHash` jamás sale ni se registra en eventos. Sin PIN único por negocio (login = empleado + PIN) |
 | Caja (apertura/cierre, movimientos, informe Z, `getExpected`) | `cash-session.ts` | Cierre ciego: `canSeeExpectedCash` decide qué ve cada rol. `cashSumsColumns` es el único sitio que agrega el efectivo (una sentencia; lo usan `close` y `getExpected`) |
@@ -108,7 +108,7 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 ### Stores Zustand (`apps/web/src/lib/stores/`)
 | Store | Archivo | Qué gestiona |
 |---|---|---|
-| Comanda activa (multi-sesión) | `use-order-store.ts` | ⭐ patrón de referencia; sesiones por mesa + barra |
+| Comanda activa (multi-sesión) | `use-order-store.ts` | ⭐ patrón de referencia; sesiones por mesa + barra. Líneas con `status`/`savedQuantity` (guardada = fijada), `voidedLines`, y `hydrateFromServer`/`applyServerOrder` FUSIONAN (no reemplazan). Clave persistida `tpv.orderStore.v3` |
 | Dispositivo / pairing | `use-device-store.ts` | token de dispositivo, businessId |
 | Empleado activo (PIN) | `use-employee-store.ts` | employeeId, nombre, rol |
 
@@ -117,12 +117,12 @@ Un único fichero. Contiene todos los schemas de input: `upsertOrderSchema`, `cr
 |---|---|
 | Shell de venta | `tpv-shell.tsx`, `tpv-header.tsx`, `tpv-order-sidebar.tsx` |
 | Productos | `tpv-product-grid.tsx`, `tpv-product-card.tsx`, `tpv-category-tabs.tsx`, `tpv-search-input.tsx` |
-| Comanda | `tpv-order-lines.tsx`, `tpv-order-line.tsx`, `tpv-order-totals.tsx`, `tpv-clear-button.tsx` |
+| Comanda | `tpv-order-lines.tsx`, `tpv-order-line.tsx`, `tpv-order-totals.tsx`, `tpv-clear-button.tsx`, `tpv-void-line-dialog.tsx` (anular línea guardada: motivo + encargado/PIN) |
 | Guardar / hidratación | `tpv-save-order-button.tsx`, `tpv-order-hydrator.tsx` |
 | Cobro | `payment/payment-dialog.tsx`, `payment/bill-button.tsx`, `payment/cash-panel.tsx` |
 | Caja / informe Z | `cash/open-cash-session-dialog.tsx`, `cash/close-cash-session-dialog.tsx`, `cash/cash-movement-dialog.tsx`, `cash/z-report.tsx`, `cash/tpv-cash-chip.tsx` |
 | Impresión (ticket simplificado, comanda cocina) | `print/invoice-ticket.tsx`, `print/kitchen-order.tsx`, `tpv-send-to-kitchen-button.tsx`, `tpv-request-bill-button.tsx` (pedir cuenta) |
-| Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx` |
+| Auth (gate, PIN, pairing) | `auth/tpv-auth-gate.tsx`, `auth/employee-login-screen.tsx`, `auth/device-pairing-screen.tsx`, `auth/pin-pad.tsx` (teclado reutilizable; `pin-keypad.tsx` = login) |
 | Plano de sala (TPV) | `floor/tpv-floor-zone-tabs.tsx`, `floor/tpv-floor-view.tsx`, `floor/tpv-floor-table.tsx`, `floor/tpv-back-to-floor-button.tsx` (guardado optimista), `floor/tpv-floor-counter-button.tsx`; el plano se coloca por posición (escala + mínimo táctil + hueco libre para altas) con lógica pura en `lib/floor/floor-layout.ts`; estado en `lib/tpv/floor-state.ts` |
 
 ### Componentes Admin (`apps/web/src/components/admin/`)

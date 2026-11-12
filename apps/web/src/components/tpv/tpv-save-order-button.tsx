@@ -27,7 +27,10 @@ export function TpvSaveOrderButton() {
       toast.success(t('saveSuccess', { number: data.orderNumber }));
     },
     onError: (e) => {
-      toast.error(e.message || t('saveError'));
+      // Mensajes del servidor que el camarero puede entender; el resto, el genérico.
+      if (e.message === 'LINE_LOCKED_USE_VOID') toast.error(t('lineLockedError'));
+      else if (e.message === 'LINE_SENT_CANNOT_GROW') toast.error(t('lineSentError'));
+      else toast.error(t('saveError'));
     },
   });
 
@@ -47,14 +50,24 @@ export function TpvSaveOrderButton() {
     });
   };
 
-  const label = savedOrderNumber !== null ? `${t('save')} #${savedOrderNumber}` : t('save');
+  // Guardada y sin cambios: no hay nada que guardar. Cambios = línea nueva o cantidad subida.
+  const hasChanges = lines.some(
+    (l) => l.savedQuantity === undefined || l.quantity !== l.savedQuantity,
+  );
+  const isSaved = savedOrderNumber !== null && !hasChanges;
+
+  const label = isSaved
+    ? `${t('saved')} #${savedOrderNumber}`
+    : savedOrderNumber !== null
+      ? `${t('save')} #${savedOrderNumber}`
+      : t('save');
 
   return (
     <Button
       variant="secondary"
       size="xl"
       className="w-full"
-      disabled={lines.length === 0 || isPending}
+      disabled={lines.length === 0 || isPending || isSaved}
       aria-label={label}
       onClick={handleSave}
     >

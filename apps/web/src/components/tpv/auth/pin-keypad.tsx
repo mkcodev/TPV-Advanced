@@ -2,9 +2,9 @@
 
 import { PIN_MAX_DIGITS, PIN_MIN_DIGITS } from '@/lib/tpv/auth-constants';
 import { trpc } from '@/lib/trpc/client';
-import { Delete, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useReducer } from 'react';
+import { PinPad } from './pin-pad';
 
 interface EmployeeRef {
   id: string;
@@ -118,17 +118,6 @@ export function PinKeypad({ employeeId, employeeName, onSuccess, onBack }: PinKe
         <p className="text-base font-medium text-foreground">
           {t('login.enterPinFor', { name: employeeName })}
         </p>
-        {/* PIN dot indicator */}
-        <div className="flex items-center justify-center gap-3" aria-hidden="true">
-          {(['p0', 'p1', 'p2', 'p3', 'p4', 'p5'] as const).map((key, pos) => (
-            <div
-              key={key}
-              className={`h-3 w-3 rounded-full transition-colors duration-[var(--duration-fast)] ${
-                pos < state.digits.length ? 'bg-primary' : 'bg-border'
-              }`}
-            />
-          ))}
-        </div>
       </div>
 
       {state.error && (
@@ -137,37 +126,13 @@ export function PinKeypad({ employeeId, employeeName, onSuccess, onBack }: PinKe
         </p>
       )}
 
-      {/* Numeric keypad: 1-9 then clear/0/backspace */}
-      <div className="grid grid-cols-3 gap-3 w-full">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-          <KeypadButton
-            key={d}
-            label={d}
-            onClick={() => handleDigit(d)}
-            disabled={keypadDisabled || state.digits.length >= PIN_MAX_DIGITS}
-          />
-        ))}
-
-        <KeypadButton
-          label={<X className="h-5 w-5" aria-hidden="true" />}
-          ariaLabel={t('keypad.clear')}
-          onClick={() => dispatch({ type: 'CLEAR' })}
-          disabled={keypadDisabled}
-          variant="ghost"
-        />
-        <KeypadButton
-          label="0"
-          onClick={() => handleDigit('0')}
-          disabled={keypadDisabled || state.digits.length >= PIN_MAX_DIGITS}
-        />
-        <KeypadButton
-          label={<Delete className="h-5 w-5" aria-hidden="true" />}
-          ariaLabel={t('keypad.backspace')}
-          onClick={() => dispatch({ type: 'BACKSPACE' })}
-          disabled={keypadDisabled}
-          variant="ghost"
-        />
-      </div>
+      <PinPad
+        digits={state.digits}
+        disabled={keypadDisabled}
+        onDigit={handleDigit}
+        onClear={() => dispatch({ type: 'CLEAR' })}
+        onBackspace={() => dispatch({ type: 'BACKSPACE' })}
+      />
 
       <button
         type="button"
@@ -177,40 +142,5 @@ export function PinKeypad({ employeeId, employeeName, onSuccess, onBack }: PinKe
         ← {t('login.changeEmployee')}
       </button>
     </div>
-  );
-}
-
-interface KeypadButtonProps {
-  label: React.ReactNode;
-  ariaLabel?: string;
-  onClick: () => void;
-  disabled?: boolean;
-  variant?: 'default' | 'ghost';
-}
-
-function KeypadButton({
-  label,
-  ariaLabel,
-  onClick,
-  disabled,
-  variant = 'default',
-}: KeypadButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      className={[
-        'flex min-h-16 min-w-16 items-center justify-center rounded-xl text-xl font-semibold',
-        'transition-colors duration-[var(--duration-fast)]',
-        'disabled:opacity-40 disabled:cursor-not-allowed',
-        variant === 'ghost'
-          ? 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted'
-          : 'bg-card border border-border text-foreground hover:bg-muted active:scale-95',
-      ].join(' ')}
-    >
-      {label}
-    </button>
   );
 }

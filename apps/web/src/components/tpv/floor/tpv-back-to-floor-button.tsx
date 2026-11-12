@@ -15,16 +15,18 @@ export function TpvBackToFloorButton() {
   const router = useRouter();
   const utils = trpc.useUtils();
 
-  const { lines, type, tableId, tableName, zoneId, ensureOrderId } = useOrderStore(
-    useShallow((s) => ({
-      lines: s.lines,
-      type: s.type,
-      tableId: s.tableId,
-      tableName: s.tableName,
-      zoneId: s.zoneId,
-      ensureOrderId: s.ensureOrderId,
-    })),
-  );
+  const { lines, type, tableId, tableName, zoneId, ensureOrderId, applyServerOrder } =
+    useOrderStore(
+      useShallow((s) => ({
+        lines: s.lines,
+        applyServerOrder: s.applyServerOrder,
+        type: s.type,
+        tableId: s.tableId,
+        tableName: s.tableName,
+        zoneId: s.zoneId,
+        ensureOrderId: s.ensureOrderId,
+      })),
+    );
 
   async function handleBack() {
     // Barra: no se guarda nada al salir. Sus líneas quedan en la sesión local del store
@@ -35,6 +37,8 @@ export function TpvBackToFloorButton() {
     }
 
     const orderId = ensureOrderId();
+    // Sesión a la que pertenece este guardado: al terminar puede haber otra mesa activa.
+    const sessionKey = useOrderStore.getState().activeKey;
     const floorKey = { zoneId };
     // Cortamos un refetch en vuelo del plano: si llegara tarde pisaría la mesa pintada.
     await utils.floor.tables.listWithOpenOrders.cancel(floorKey);
@@ -49,8 +53,11 @@ export function TpvBackToFloorButton() {
       snapshot: utils.floor.tables.listWithOpenOrders.getData(floorKey),
       optimistic: (current) => markTableOccupied(current, tableId, orderId, new Date()),
       setData: (data) => utils.floor.tables.listWithOpenOrders.setData(floorKey, data),
-      save: () =>
-        utils.client.orders.upsert.mutate({
+      // Al guardarse, las líneas pasan a "guardadas" (fijadas) también en el store local, aunque
+      // la sesión esté ya aparcada: si no, al volver a la mesa se podrían quitar y el servidor
+      // lo rechazaría.
+      save: async () => {
+        const saved = await utils.client.orders.upsert.mutate({
           orderId,
           type,
           tableId,
@@ -60,7 +67,10 @@ export function TpvBackToFloorButton() {
             quantity: l.quantity,
             ...(l.notes ? { notes: l.notes } : {}),
           })),
-        }),
+        });
+        applyServerOrder(sessionKey, saved);
+        return saved;
+      },
       invalidate: () => utils.floor.tables.listWithOpenOrders.invalidate(floorKey),
       notifyError: () => toast.error(t('saveFailed', { name: tableName ?? '' })),
     });

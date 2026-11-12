@@ -1,8 +1,6 @@
 import {
   PAIRING_CODE_TTL_MS,
-  applyPinFailure,
   applyPinSuccess,
-  checkLockout,
   generatePairingCode,
   pairingCodeExpiresAt,
 } from '@tpv/core';
@@ -17,10 +15,10 @@ import {
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { logAuthEvent } from '../auth/events';
-import { DUMMY_HASH_PROMISE, verifyPin } from '../auth/pin';
 import { consumeRateLimit } from '../auth/rate-limit-store';
 import { signEmployeeSession } from '../auth/session';
 import { generateDeviceToken, sha256Base64Url } from '../auth/tokens';
+import { verifyEmployeePin } from '../auth/verify-employee-pin';
 import { getServerEnv } from '../env';
 import { deviceProcedure, panelAdminProcedure } from '../procedures';
 import { publicProcedure, router } from '../trpc';
@@ -171,71 +169,15 @@ export const authRouter = router({
 
   // Employee authenticates with PIN and receives a short-lived session JWT.
   employeeLogin: deviceProcedure.input(employeeLoginSchema).mutation(async ({ ctx, input }) => {
-    const now = new Date();
-    const rateLimitKey = `login:${ctx.ip}:${ctx.deviceId}`;
-    const allowed = await consumeRateLimit(ctx.db, rateLimitKey, now);
-    if (!allowed) {
-      throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many login attempts' });
-    }
-
-    // Load employee — must belong to this business and be active.
-    const [employee] = await ctx.db
-      .select()
-      .from(employees)
-      .where(
-        and(
-          eq(employees.id, input.employeeId),
-          eq(employees.businessId, ctx.businessId),
-          eq(employees.isActive, true),
-        ),
-      )
-      .limit(1);
-
-    // Anti-timing: run verifyPin against a dummy hash when the employee doesn't
-    // exist, so response time is indistinguishable from a wrong-PIN failure.
-    const pinHash = employee?.pinHash ?? (await DUMMY_HASH_PROMISE);
-    const pinValid = await verifyPin(pinHash, input.pin);
-
-    if (!employee) {
-      // Don't reveal that the employee ID doesn't exist.
-      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid credentials' });
-    }
-
-    // Check lockout before returning success (after dummy-verify path is past).
-    const lockout = checkLockout(employee, now);
-    if (lockout.locked) {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: `Account locked until ${lockout.until.toISOString()}`,
-      });
-    }
-
-    if (!pinValid) {
-      const failure = applyPinFailure(employee, now);
-      await ctx.db
-        .update(employees)
-        .set({ failedPinAttempts: failure.failedPinAttempts, lockedUntil: failure.lockedUntil })
-        .where(eq(employees.id, employee.id));
-
-      await logAuthEvent(ctx.db, {
-        businessId: ctx.businessId,
-        deviceId: ctx.deviceId ?? undefined,
-        employeeId: employee.id,
-        eventType: 'employee_login_failed',
-      });
-
-      if (failure.justLocked) {
-        await logAuthEvent(ctx.db, {
-          businessId: ctx.businessId,
-          deviceId: ctx.deviceId ?? undefined,
-          employeeId: employee.id,
-          eventType: 'employee_locked_out',
-          payload: { until: failure.lockedUntil },
-        });
-      }
-
-      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid credentials' });
-    }
+    // Rate-limit, lockout, contador de fallos y eventos viven en verifyEmployeePin
+    // (compartido con la anulación de líneas con PIN de encargado).
+    const employee = await verifyEmployeePin(ctx.db, {
+      businessId: ctx.businessId,
+      deviceId: ctx.deviceId,
+      ip: ctx.ip,
+      employeeId: input.employeeId,
+      pin: input.pin,
+    });
 
     // Success: reset lockout counters.
     const reset = applyPinSuccess();

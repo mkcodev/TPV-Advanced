@@ -1,0 +1,1 @@
+ALTER TABLE "order_items" ADD CONSTRAINT "order_items_voided_check" CHECK ("order_items"."status" <> 'cancelled' OR ("order_items"."voided_reason" IS NOT NULL AND "order_items"."voided_by" IS NOT NULL));

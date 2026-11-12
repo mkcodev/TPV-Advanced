@@ -17,10 +17,14 @@ import { useTranslations } from 'next-intl';
 
 export function TpvClearButton() {
   const t = useTranslations('tpv.order');
-  const lineCount = useOrderStore((s) => s.lines.length);
-  const clear = useOrderStore((s) => s.clear);
+  // Solo se limpia lo no guardado: las líneas guardadas están fijadas y solo se anulan.
+  const draftCount = useOrderStore(
+    (s) =>
+      s.lines.filter((l) => l.savedQuantity === undefined || l.quantity > l.savedQuantity).length,
+  );
+  const clear = useOrderStore((s) => s.discardDraft);
 
-  if (lineCount === 0) {
+  if (draftCount === 0) {
     return (
       <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" disabled>
         {t('clear')}
