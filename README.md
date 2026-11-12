@@ -106,39 +106,23 @@ Su autor trabajó años de camarero y conoce el problema desde dentro. El objeti
 ## 🧱 Arquitectura
 
 ```mermaid
-flowchart LR
-  subgraph Cliente["Navegador (apps/web)"]
-    TPV["TPV /tpv<br/>plano, venta, caja"]
-    ADM["Admin /admin<br/>catálogo, sala, empleados, terminales"]
-    ZS["Zustand<br/>comanda, dispositivo, empleado"]
-  end
-  subgraph Servidor["Servidor Next.js"]
-    MW["middleware.ts<br/>refresca sesión Supabase"]
-    RT["/api/trpc"]
-    RES["Resolver de auth<br/>device / admin / anonymous"]
-    PROC["businessProcedure<br/>business_id del contexto"]
-    ROU["Routers tRPC<br/>catalog · floor · orders<br/>cash-session · employees · auth"]
-  end
-  subgraph Paquetes["Paquetes compartidos"]
-    CORE["@tpv/core<br/>dinero, IVA, caja, roles"]
-    VAL["@tpv/validators<br/>esquemas Zod"]
-    DB["@tpv/db<br/>Drizzle + migraciones"]
-  end
-  PG[("PostgreSQL<br/>Supabase")]
-  SA["Supabase Auth"]
-  ST["Supabase Storage<br/>product-images"]
+flowchart TB
+  CL["<b>Navegador</b> · apps/web<br/>TPV /tpv · Admin /admin<br/>Zustand: comanda, dispositivo, empleado<br/>total optimista con @tpv/core"]
+  RT["<b>/api/trpc</b> · Next.js<br/>middleware refresca la sesión de Supabase"]
+  RES["<b>Resolver de auth</b><br/>device · admin · anonymous<br/>verifica el JWT de Supabase Auth"]
+  PROC["<b>businessProcedure</b><br/>business_id sale del contexto"]
+  ROU["<b>Routers tRPC</b> · @tpv/api<br/>catalog · floor · orders<br/>cash-session · employees · auth"]
+  CORE["<b>@tpv/core</b><br/>dinero, IVA, caja, roles"]
+  VAL["<b>@tpv/validators</b><br/>esquemas Zod"]
+  DB["<b>@tpv/db</b><br/>Drizzle + migraciones"]
+  PG[("<b>PostgreSQL</b><br/>Supabase")]
 
-  TPV --> ZS
-  TPV -->|"x-device-token + x-employee-session"| RT
-  ADM -->|"Authorization: Bearer JWT"| RT
-  ADM -->|"subida de fotos"| ST
-  MW --> SA
+  CL -->|"TPV: x-device-token + x-employee-session<br/>Admin: Authorization Bearer JWT"| RT
   RT --> RES --> PROC --> ROU
   ROU --> CORE
   ROU --> VAL
-  ROU --> DB --> PG
-  RES -.->|"verifica JWT"| SA
-  ZS -.->|"total optimista"| CORE
+  ROU --> DB
+  DB --> PG
 ```
 
 ```text
